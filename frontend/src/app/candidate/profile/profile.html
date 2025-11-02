@@ -58,7 +58,7 @@
             </span>
             <span class="meta-item">
               <span class="icon">📅</span>
-              Since {{ profile.createdDate ? (profile.createdDate | date:'yyyy') : '2024' }}
+              Since 2025
             </span>
           </div>
         </div>
@@ -150,7 +150,7 @@
                 type="date"
                 class="info-input"
                 [(ngModel)]="editProfile.dateOfBirth">
-              <p *ngIf="!isEditMode" class="info-value">{{ profile.dateOfBirth | date:'mediumDate' }}</p>
+              <p *ngIf="!isEditMode" class="info-value">{{ profile.dateOfBirth ? (profile.dateOfBirth | date:'mediumDate') : 'Not specified' }}</p>
             </div>
 
             <!-- Address -->

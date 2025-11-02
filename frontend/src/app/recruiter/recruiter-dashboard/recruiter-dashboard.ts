@@ -32,9 +32,25 @@ export class RecruiterDashboardComponent implements OnInit, OnDestroy, AfterView
     private signalRService: SignalRService
   ) {}
 
+  private dataLoaded = false;
+
   async ngOnInit() {
-    this.loadDashboardData();
-    await this.setupSignalR();
+    // Wait for authentication to be initialized
+    await this.authService.initializeAsyncAuth();
+
+    // Subscribe to authentication state changes (only once)
+    this.authService.currentUser$.subscribe(user => {
+      if (user && user.token && !this.dataLoaded) {
+        console.log('User authenticated, loading dashboard data');
+        this.dataLoaded = true;
+        this.loadDashboardData();
+        this.setupSignalR();
+      } else if (!user || !user.token) {
+        console.log('User not authenticated, skipping dashboard data load');
+        this.isLoading = false;
+        this.dataLoaded = false;
+      }
+    });
   }
 
   ngOnDestroy() {
@@ -149,16 +165,12 @@ export class RecruiterDashboardComponent implements OnInit, OnDestroy, AfterView
     });
   }
 
-  private async setupSignalR() {
-    try {
-      await this.signalRService.startConnection();
+  private setupSignalR() {
+    // Setup SignalR asynchronously without blocking dashboard load
+    this.signalRService.startConnection().then(() => {
       console.log('SignalR connection established for recruiter dashboard');
 
       // Subscribe to real-time dashboard updates
-      // Optimizations to prevent flickering:
-      // - Only update stats instead of reloading all data
-      // - Only update if data actually changed
-      // - Prevent multiple simultaneous updates
       this.signalRSubscription.add(
         this.signalRService.dashboardUpdates.subscribe((update: DashboardUpdate | null) => {
           if (update && update.updateType === 'stats-update') {
@@ -173,9 +185,9 @@ export class RecruiterDashboardComponent implements OnInit, OnDestroy, AfterView
           }
         })
       );
-    } catch (error) {
+    }).catch(error => {
       console.error('Error setting up SignalR connection:', error);
-    }
+    });
   }
 
   private loadStatsOnly() {

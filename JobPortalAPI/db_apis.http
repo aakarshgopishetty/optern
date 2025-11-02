@@ -1,6 +1,0 @@
-@db_apis_HostAddress = http://localhost:5282
-
-GET {{db_apis_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

@@ -8,52 +8,90 @@
       <h1 class="page-title">Find <span class="highlight">Candidates</span></h1>
       <p class="page-description">Search and discover talented candidates based on skills, experience, and location.</p>
     </div>
-    <button class="search-history-btn" (click)="openSearchHistory()">
-      <span class="history-icon">🕐</span> Search History
-    </button>
   </div>
 
   <!-- Search and Filter Section -->
   <div class="search-filter-section">
     <div class="search-box">
       <span class="search-icon">🔍</span>
-      <input 
-        type="text" 
-        placeholder="Search candidates, skills, or job titles..." 
+      <input
+        type="text"
+        placeholder="Search candidates, skills, or job titles..."
         class="search-input"
         [(ngModel)]="searchQuery"
+        (input)="onSearch()"
         (keyup.enter)="onSearch()">
     </div>
-    
+
     <button class="filters-btn" (click)="toggleFilters()">
-      <span class="filter-icon">▼</span> Filters
+      <span class="filter-icon" [class.rotated]="showFilters">▼</span> Filters
     </button>
-    
-    <button 
-      class="view-toggle grid-view" 
+
+    <button
+      class="view-toggle grid-view"
       [class.active]="viewMode === 'grid'"
       (click)="setViewMode('grid')">
       <span class="grid-icon">⊞</span>
     </button>
-    
-    <button 
-      class="view-toggle list-view" 
+
+    <button
+      class="view-toggle list-view"
       [class.active]="viewMode === 'list'"
       (click)="setViewMode('list')">
       <span class="list-icon">☰</span>
     </button>
-    
-    <button class="search-btn" (click)="onSearch()">Search</button>
+
+
+  </div>
+
+  <!-- Filter Panel -->
+  <div class="filter-panel" *ngIf="showFilters">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <select class="filter-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option value="">All Status</option>
+          <option value="available">Available</option>
+          <option value="employed">Employed</option>
+          <option value="not-looking">Not Looking</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Experience</label>
+        <select class="filter-select" [(ngModel)]="experienceFilter" (change)="applyFilters()">
+          <option value="">All Experience</option>
+          <option value="entry">Entry Level (0-2 years)</option>
+          <option value="mid">Mid Level (3-5 years)</option>
+          <option value="senior">Senior Level (6+ years)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Location</label>
+        <input
+          type="text"
+          class="filter-input"
+          placeholder="Enter location..."
+          [(ngModel)]="locationFilter"
+          (input)="applyFilters()">
+      </div>
+
+      <div class="filter-actions">
+        <button class="clear-filters-btn" (click)="clearFilters()">Clear All</button>
+        <button class="apply-filters-btn" (click)="applyFilters()">Apply Filters</button>
+      </div>
+    </div>
   </div>
 
   <!-- Results Count -->
   <div class="results-info">
-    <p>Found <strong>{{ candidates.length }}</strong> candidates</p>
+    <p>Found <strong>{{ filteredCandidates.length }}</strong> candidates</p>
   </div>
 
   <!-- Grid View -->
   <div class="candidates-grid" *ngIf="viewMode === 'grid'">
-    <div class="candidate-card" *ngFor="let candidate of candidates">
+    <div class="candidate-card" *ngFor="let candidate of filteredCandidates">
       <div class="card-header">
         <div class="avatar" [ngClass]="candidate.avatarColor">{{ candidate.avatarLetter }}</div>
         <div class="candidate-info">
@@ -117,7 +155,7 @@
 
   <!-- List View -->
   <div class="candidates-list" *ngIf="viewMode === 'list'">
-    <div class="candidate-list-item" *ngFor="let candidate of candidates">
+    <div class="candidate-list-item" *ngFor="let candidate of filteredCandidates">
       <div class="list-item-left">
         <div class="avatar" [ngClass]="candidate.avatarColor">{{ candidate.avatarLetter }}</div>
         <div class="list-candidate-info">
@@ -172,34 +210,7 @@
   </div>
 </div>
 
-<!-- Search History Modal -->
-<div class="modal-overlay" *ngIf="showSearchHistoryModal" (click)="closeSearchHistory()">
-  <div class="modal-content search-history-modal" (click)="$event.stopPropagation()">
-    <div class="modal-header">
-      <h2>Recent Searches</h2>
-      <button class="close-btn" (click)="closeSearchHistory()">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="search-history-list">
-        <div 
-          class="search-history-item" 
-          *ngFor="let search of searchHistory"
-          (click)="loadSearchHistory(search)">
-          <div class="search-history-content">
-            <h3>{{ search.title }}</h3>
-            <p class="search-details">Skills: {{ search.skills }}</p>
-            <p class="search-details" *ngIf="search.experience">Experience: {{ search.experience }}</p>
-            <p class="search-details" *ngIf="search.location">Location: {{ search.location }}</p>
-            <p class="search-results">{{ search.resultsCount }} results found</p>
-          </div>
-          <div class="search-timestamp">
-            {{ search.timestamp }}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+
 
 <!-- Profile View Modal -->
 <div class="modal-overlay" *ngIf="showProfileModal && selectedCandidate" (click)="closeProfileModal()">

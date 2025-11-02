@@ -18,6 +18,10 @@ namespace JobPortalAPI.Data
 
         // Core Tables
         public DbSet<User> Users { get; set; }
+        public DbSet<UserLoginAttempt> UserLoginAttempts { get; set; }
+        public DbSet<UserSession> UserSessions { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
         public DbSet<CandidateProfile> CandidateProfiles { get; set; }
         public DbSet<Company> Companies { get; set; }
         public DbSet<Recruiter> Recruiters { get; set; }

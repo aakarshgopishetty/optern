@@ -2,6 +2,7 @@ import { Component, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { JobService, Job as UiJob } from '../../services/job.service';
 import { FormsModule } from '@angular/forms';
+import { AlertService } from '../../services/alert.service';
 
 interface Job {
   id: number;
@@ -45,6 +46,7 @@ export class RecruiterOpportunitiesComponent {
   jobs: UiJob[] = [];
   private jobService = inject(JobService);
   private cdr = inject(ChangeDetectorRef);
+  private alertService = inject(AlertService);
 
   // Simple model for posting a job
   newJob: {
@@ -224,12 +226,12 @@ export class RecruiterOpportunitiesComponent {
 
   editJobSubmit() {
     if (!this.editJob.title || !this.editJob.location || !this.editJob.description || !this.editJob.salary) {
-      alert('Please fill in all required fields');
+      this.alertService.error('Validation Error', 'Please fill in all required fields');
       return;
     }
 
     if (!this.editJob.jobID) {
-      alert('Job ID is missing');
+      this.alertService.error('System Error', 'Job ID is missing');
       return;
     }
 
@@ -267,13 +269,13 @@ export class RecruiterOpportunitiesComponent {
         // Reset loading state
         this.isLoading = false;
 
-        alert('Job updated successfully!');
+        this.alertService.success('Success', 'Job updated successfully!');
       },
       error: (err) => {
         console.error('Error updating job:', err);
         console.error('Error response:', err.error);
         const errorMessage = err?.error?.message || err?.message || 'Unknown error occurred';
-        alert('Failed to update job: ' + errorMessage);
+        this.alertService.error('Update Failed', 'Failed to update job: ' + errorMessage);
         this.isLoading = false; // Reset loading state on error
       }
     });
@@ -285,7 +287,7 @@ export class RecruiterOpportunitiesComponent {
 
   postJob() {
     if (!this.newJob.title || !this.newJob.location || !this.newJob.description || !this.newJob.salary) {
-      alert('Please fill in all required fields');
+      this.alertService.error('Validation Error', 'Please fill in all required fields');
       return;
     }
 
@@ -324,13 +326,13 @@ export class RecruiterOpportunitiesComponent {
         // Reset loading state
         this.isLoading = false;
 
-        alert('Job posted successfully!');
+        this.alertService.success('Success', 'Job posted successfully!');
       },
       error: (err) => {
         console.error('Error creating job:', err);
         console.error('Error response:', err.error);
         const errorMessage = err?.error?.message || err?.message || 'Unknown error occurred';
-        alert('Failed to post job: ' + errorMessage);
+        this.alertService.error('Posting Failed', 'Failed to post job: ' + errorMessage);
         this.isLoading = false; // Reset loading state on error
       }
     });
@@ -340,13 +342,19 @@ export class RecruiterOpportunitiesComponent {
     this.filterActiveTab = tab;
   }
 
-  deleteJob(job: UiJob) {
+  async deleteJob(job: UiJob) {
     if (!job.jobID) {
-      alert('Job ID is missing');
+      this.alertService.error('System Error', 'Job ID is missing');
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
+    const confirmed = await this.alertService.confirm(
+      'Delete Job',
+      'Are you sure you want to delete this job? This action cannot be undone.',
+      { type: 'danger', confirmText: 'Delete', cancelText: 'Cancel' }
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -358,13 +366,13 @@ export class RecruiterOpportunitiesComponent {
         console.log('Job deleted successfully');
         // The service should handle updating the BehaviorSubject
         this.isLoading = false;
-        alert('Job deleted successfully!');
+        this.alertService.success('Success', 'Job deleted successfully!');
       },
       error: (err) => {
         console.error('Error deleting job:', err);
         console.error('Error response:', err.error);
         const errorMessage = err?.error?.message || err?.message || 'Unknown error occurred';
-        alert('Failed to delete job: ' + errorMessage);
+        this.alertService.error('Deletion Failed', 'Failed to delete job: ' + errorMessage);
         this.isLoading = false;
       }
     });
@@ -373,9 +381,7 @@ export class RecruiterOpportunitiesComponent {
   private getErrorMessage(err: any): string {
     console.log('Parsing error for user display:', err);
 
-    if (err?.status === 401) {
-      return 'Authentication failed. Please log in again.';
-    } else if (err?.status === 403) {
+    if (err?.status === 403) {
       return 'Access denied. You may not have permission to view jobs.';
     } else if (err?.status === 404) {
       return 'Recruiter profile not found. Please contact support.';
@@ -386,7 +392,7 @@ export class RecruiterOpportunitiesComponent {
     } else if (err?.message) {
       return err.message;
     } else {
-      return 'Failed to load job opportunities. This might be due to a network issue or authentication problem.';
+      return 'Failed to load job opportunities. This might be due to a network issue.';
     }
   }
 }

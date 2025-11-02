@@ -1,5 +1,5 @@
 <div class="alerts-container" *ngIf="alerts.length > 0">
-  <div [ngClass]="getAlertClass(alert.type)" *ngFor="let alert of alerts" [@fadeInOut]>
+  <div [ngClass]="getAlertClass(alert.type)" *ngFor="let alert of alerts">
     <div class="alert-content">
       <i [class]="getAlertIcon(alert.type)" class="alert-icon"></i>
       <div class="alert-text">

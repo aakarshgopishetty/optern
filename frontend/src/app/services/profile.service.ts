@@ -171,6 +171,23 @@ export class ProfileService {
     );
   }
 
+  // Get all candidate profiles (for recruiters to browse all candidates)
+  getAllCandidates(): Observable<CandidateProfile[]> {
+    return this.http.get<any>(`${this.apiUrl}`).pipe(
+      map(response => {
+        // Handle ASP.NET Core serialization format with $values
+        const dtos = response.$values || response;
+        if (Array.isArray(dtos)) {
+          return dtos.map(dto => this.convertDtoToProfile(dto));
+        } else {
+          console.error('Expected array of candidate profiles, got:', response);
+          return [];
+        }
+      }),
+      catchError(this.handleError)
+    );
+  }
+
   // Get default profile structure for new users
   private getDefaultProfile(): CandidateProfile {
     return {
@@ -206,7 +223,7 @@ export class ProfileService {
       phoneNumber: dto.PhoneNumber,
       linkedInProfile: dto.LinkedInProfile,
       address: dto.Address,
-      dateOfBirth: new Date(dto.DateOfBirth),
+      dateOfBirth: dto.DateOfBirth ? new Date(dto.DateOfBirth) : null,
       gender: dto.Gender,
       status: dto.Status,
       resumeURL: dto.ResumeURL,
@@ -245,7 +262,7 @@ export class ProfileService {
       PhoneNumber: profile.phoneNumber,
       LinkedInProfile: profile.linkedInProfile,
       Address: profile.address,
-      DateOfBirth: toIsoString(profile.dateOfBirth),
+      DateOfBirth: profile.dateOfBirth ? toIsoString(profile.dateOfBirth) : null,
       Gender: profile.gender,
       Status: profile.status,
       ResumeURL: profile.resumeURL,

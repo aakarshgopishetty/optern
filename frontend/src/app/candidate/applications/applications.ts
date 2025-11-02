@@ -219,32 +219,28 @@ export class Applications implements OnInit, OnDestroy {
   downloadResume(app: any): void {
     if (app.ResumeUrl) {
       window.open(app.ResumeUrl, '_blank');
+      this.showAlert('success', 'Resume Downloaded', 'Resume download initiated successfully.');
     } else {
-      this.alertService.warning('Resume Unavailable', 'Resume not available for download.');
+      this.showAlert('warning', 'Resume Unavailable', 'Resume not available for download.');
     }
   }
 
   async withdrawApplication(app: any): Promise<void> {
-    const confirmed = await this.alertService.confirm(
+    const confirmed = await this.showConfirmDialog(
       'Withdraw Application',
-      `Are you sure you want to withdraw your application for "${app.Job?.Title}"? This action cannot be undone.`,
-      {
-        confirmText: 'Withdraw',
-        cancelText: 'Cancel',
-        type: 'danger'
-      }
+      `Are you sure you want to withdraw your application for "${app.Job?.Title}"? This action cannot be undone.`
     );
 
     if (confirmed) {
       this.applicationService.delete(app.ApplicationID).subscribe({
         next: () => {
-          this.alertService.success('Application Withdrawn', 'Your application has been withdrawn successfully.');
+          this.showAlert('success', 'Application Withdrawn', 'Your application has been withdrawn successfully.');
           this.loadApplications(); // Reload the applications list
           this.closeModal(); // Close the modal
         },
         error: (err) => {
           console.error('Error withdrawing application:', err);
-          this.alertService.error('Withdrawal Failed', 'Failed to withdraw application. Please try again.');
+          this.showAlert('error', 'Withdrawal Failed', 'Failed to withdraw application. Please try again.');
         }
       });
     }
@@ -344,5 +340,140 @@ export class Applications implements OnInit, OnDestroy {
     });
 
     document.body.appendChild(modalOverlay);
+  }
+
+  // DOM-based Alert Method
+  showAlert(type: 'success' | 'error' | 'warning' | 'info', title: string, message: string): void {
+    console.log('Showing candidate alert:', type, title, message);
+
+    // Create DOM-based alert
+    const alertDiv = document.createElement('div');
+    alertDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
+      color: white;
+      padding: 16px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      max-width: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      animation: slideInRight 0.3s ease-out;
+    `;
+
+    alertDiv.innerHTML = `
+      <div style="display: flex; align-items: flex-start; gap: 12px;">
+        <i class="bi ${type === 'success' ? 'bi-check-circle-fill' : type === 'error' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill'}" style="font-size: 20px; flex-shrink: 0; margin-top: 2px;"></i>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; margin-bottom: 4px;">${title}</div>
+          <div style="line-height: 1.4;">${message}</div>
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; padding: 4px; opacity: 0.8;">
+          <i class="bi bi-x" style="font-size: 16px;"></i>
+        </button>
+      </div>
+    `;
+
+    // Add slide-in animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.body.appendChild(alertDiv);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (alertDiv.parentElement) {
+        alertDiv.remove();
+      }
+    }, 5000);
+  }
+
+  // DOM-based Confirm Dialog
+  showConfirmDialog(title: string, message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+        backdrop-filter: blur(4px);
+      `;
+
+      const modalContent = document.createElement('div');
+      modalContent.style.cssText = `
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+      `;
+
+      modalContent.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 18px; font-weight: 600;">${title}</h3>
+        <p style="margin: 0 0 20px 0; color: #64748b; font-size: 14px; line-height: 1.5;">${message}</p>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button id="cancel-btn" style="
+            padding: 10px 20px;
+            border: 1px solid #d1d5db;
+            background: white;
+            color: #6b7280;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+          ">Cancel</button>
+          <button id="confirm-btn" style="
+            padding: 10px 20px;
+            border: none;
+            background: #ef4444;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+          ">Confirm</button>
+        </div>
+      `;
+
+      modal.appendChild(modalContent);
+      document.body.appendChild(modal);
+
+      document.getElementById('cancel-btn')?.addEventListener('click', () => {
+        document.body.removeChild(modal);
+        resolve(false);
+      });
+
+      document.getElementById('confirm-btn')?.addEventListener('click', () => {
+        document.body.removeChild(modal);
+        resolve(true);
+      });
+
+      // Close modal when clicking outside
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+          resolve(false);
+        }
+      });
+    });
   }
 }

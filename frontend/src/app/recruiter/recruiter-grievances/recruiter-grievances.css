@@ -1,6 +1,114 @@
 :host { display: block; padding: 30px; background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 .grievances-container { max-width: 1200px; margin: 0 auto; }
 
+/* --- Loading State --- */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 40px 20px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.loading-state i {
+  font-size: 64px;
+  color: #d1d5db;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.loading-state p {
+  font-size: 16px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* --- Error State --- */
+.error-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 40px 20px;
+  margin: 20px 0;
+  text-align: center;
+  flex-direction: column;
+}
+
+.error-state i {
+  font-size: 64px;
+  color: #ef4444;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.error-state p {
+  font-size: 16px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0 0 20px 0;
+}
+
+.retry-btn {
+  background-color: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.retry-btn:hover {
+  background-color: #059669;
+}
+
+/* --- Empty State --- */
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 40px 20px;
+  margin: 20px 0;
+  text-align: center;
+  flex-direction: column;
+}
+
+.empty-state i {
+  font-size: 64px;
+  color: #d1d5db;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.empty-state h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px 0;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* --- Header & Controls --- */
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 600; display: flex; align-items: center; gap: 10px; margin: 0; }

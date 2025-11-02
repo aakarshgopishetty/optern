@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { GrievanceService, Grievance, CreateGrievanceRequest } from '../../services/grievance.service';
 import { AuthService } from '../../services/auth.service';
+import { AlertService } from '../../services/alert.service';
 
 interface GrievanceFormData {
   title: string;
@@ -61,7 +62,7 @@ export class Grievances implements OnInit, OnDestroy {
     return this.currentUser?.userId || 1;
   }
 
-  constructor(private grievanceService: GrievanceService, private authService: AuthService) {}
+  constructor(private grievanceService: GrievanceService, private authService: AuthService, private alertService: AlertService) {}
 
   ngOnInit() {
     this.loadCurrentUser();
@@ -280,8 +281,18 @@ export class Grievances implements OnInit, OnDestroy {
   }
 
   // --- Delete Functionality ---
-  deleteGrievance(grievance: Grievance) {
-    if (!confirm(`Are you sure you want to delete the grievance "${grievance.title}"? This action cannot be undone.`)) {
+  async deleteGrievance(grievance: Grievance) {
+    const confirmed = await this.alertService.confirm(
+      'Delete Grievance',
+      `Are you sure you want to delete the grievance "${grievance.title}"? This action cannot be undone.`,
+      {
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'danger'
+      }
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -300,6 +311,9 @@ export class Grievances implements OnInit, OnDestroy {
 
     // Save to localStorage
     this.saveGrievancesToStorage();
+
+    // Show success message
+    this.alertService.success('Grievance Deleted', 'The grievance has been successfully deleted.');
 
     console.log('Deleted grievance locally:', grievanceId);
   }

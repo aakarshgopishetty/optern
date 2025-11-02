@@ -47,7 +47,7 @@ export class Opportunities {
   };
 
   // Available categories based on job types
-  categories: string[] = ['All Categories', 'Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'];
+  categories: string[] = ['All Categories', 'Full-time', 'Part-time', 'Contract', 'Internship', 'Microinternship', 'Freelance'];
 
   // Track applied job IDs to show visual feedback
   appliedJobIds: Set<number> = new Set();

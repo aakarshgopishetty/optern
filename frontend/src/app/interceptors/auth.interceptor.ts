@@ -1,49 +1,48 @@
 import { HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { SessionTimeoutService } from '../services/session-timeout.service';
+import { catchError, throwError } from 'rxjs';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  // Get token from localStorage
-  console.log('Auth interceptor processing request:', {
-    url: req.url,
-    method: req.method,
-    headers: req.headers.keys().reduce((acc, key) => ({...acc, [key]: req.headers.get(key)}), {})
-  });
+  const sessionTimeoutService = inject(SessionTimeoutService);
 
+  // Get token from localStorage
   const raw = localStorage.getItem('optern_user');
-  console.log('Raw localStorage data:', raw);
 
   if (raw) {
     try {
       const user = JSON.parse(raw);
       if (user && user.token) {
-        console.log('Found auth token:', user.token);
         // Clone the request and add auth header
         const authReq = req.clone({
           headers: req.headers.set('Authorization', `Bearer ${user.token}`)
         });
-        console.log('Modified request headers:', {
-          original: req.headers.keys(),
-          modified: authReq.headers.keys(),
-          authHeader: authReq.headers.get('Authorization')
-        });
-        return next(authReq);
-      } else {
-        console.warn('No token found in user data:', user);
-        // Don't add test token - let the request proceed without auth
-        // This prevents interference with actual login process
-        return next(req);
+
+        // Intercept responses to detect 401 errors
+        return next(authReq).pipe(
+          catchError((error) => {
+            if (error.status === 401) {
+              // Trigger session timeout for 401 responses
+              sessionTimeoutService.triggerSessionTimeout();
+            }
+            return throwError(() => error);
+          })
+        );
       }
     } catch (error) {
-      console.error('Error parsing user data from localStorage:', error);
       // Clear invalid data
       localStorage.removeItem('optern_user');
-      // Don't add test token - let the request proceed without auth
-      return next(req);
     }
-  } else {
-    console.log('No user data found in localStorage');
-    // Don't add test token - let the request proceed without auth
-    // This prevents interference with actual login process
-    return next(req);
   }
-  return next(req);
+
+  // For requests without auth, still check for 401 responses
+  return next(req).pipe(
+    catchError((error) => {
+      if (error.status === 401) {
+        // Trigger session timeout for 401 responses
+        sessionTimeoutService.triggerSessionTimeout();
+      }
+      return throwError(() => error);
+    })
+  );
 };

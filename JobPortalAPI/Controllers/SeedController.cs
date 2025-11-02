@@ -11,532 +11,143 @@ public class SeedController : ControllerBase
 
     public SeedController(JobPortalContext context) => _context = context;
 
-    [HttpPost("data")]
-    public async Task<IActionResult> SeedData()
+    // PRODUCTION: Data reset endpoint - USE WITH EXTREME CAUTION
+    // This will permanently delete ALL data from the database
+    [HttpPost("reset")]
+    public async Task<IActionResult> ResetData()
     {
         try
         {
-            // Check if data already exists
-            if (await _context.Companies.AnyAsync() || await _context.CandidateProfiles.AnyAsync())
+            // SECURITY: Only allow in development or with special header
+            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            var allowReset = HttpContext.Request.Headers.ContainsKey("X-Allow-Data-Reset");
+
+            if (environment != "Development" && !allowReset)
             {
-                return Ok("Data already exists");
+                return StatusCode(403, new {
+                    message = "Data reset not allowed in production. " +
+                             "Add header 'X-Allow-Data-Reset: true' to force reset.",
+                    environment = environment
+                });
             }
 
-            // Create industry lookup first
-            var industry = new IndustryLookup
-            {
-                IndustryName = "Technology"
-            };
-            _context.IndustryLookups.Add(industry);
-            await _context.SaveChangesAsync();
+            Console.WriteLine("WARNING: Starting complete data reset...");
 
-            // Create test company
-            var company = new Company
-            {
-                Name = "Tech Solutions Inc",
-                Website = "https://techsolutions.com",
-                Size = "51-200",
-                Address = "123 Tech Street, Silicon Valley",
-                Phone = "123-456-7890",
-                CreatedDate = DateTime.UtcNow,
-                IndustryID = industry.IndustryID
-            };
-            _context.Companies.Add(company);
-            await _context.SaveChangesAsync();
+            // Clear all data in correct order (respecting foreign key constraints)
+            // Delete dependent records first, then parent records
 
-            // Create test users first
-            var recruiterUser = new User
-            {
-                Role = "Recruiter",
-                Username = "recruiter",
-                Email = "recruiter@test.com",
-                Status = "Active",
-                PhoneNumber = "123-456-7890",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                VerificationStatus = "Verified",
-                Password = BCrypt.Net.BCrypt.HashPassword("password123")
-            };
-            _context.Users.Add(recruiterUser);
+            // 1. Delete user sessions (depends on users)
+            _context.UserSessions.RemoveRange(_context.UserSessions);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared user sessions");
 
-            var candidateUser = new User
-            {
-                Role = "Candidate",
-                Username = "candidate",
-                Email = "candidate@test.com",
-                Status = "Active",
-                PhoneNumber = "987-654-3210",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                VerificationStatus = "Verified",
-                Password = BCrypt.Net.BCrypt.HashPassword("password123")
-            };
-            _context.Users.Add(candidateUser);
+            // 2. Delete password reset tokens (depends on users)
+            _context.PasswordResetTokens.RemoveRange(_context.PasswordResetTokens);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared password reset tokens");
 
-            // Create test recruiter with UserId
-            var recruiter = new Recruiter
-            {
-                FullName = "John Smith",
-                Email = "recruiter@test.com",
-                PhoneNumber = "123-456-7890",
-                CompanyID = company.CompanyID,
-                JobTitle = "Senior Recruiter",
-                Bio = "Experienced HR professional",
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow,
-                UserId = recruiterUser.UserId
-            };
-            _context.Recruiters.Add(recruiter);
+            // 3. Delete refresh tokens (depends on users)
+            _context.RefreshTokens.RemoveRange(_context.RefreshTokens);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared refresh tokens");
 
-            // Create test candidate with UserId
-            var candidate = new CandidateProfile
-            {
-                FullName = "Jane Doe",
-                Email = "candidate@test.com",
-                PhoneNumber = "987-654-3210",
-                Address = "123 Main St, City, State",
-                DateOfBirth = new DateTime(1990, 1, 1),
-                Gender = "Female",
-                Status = "Active",
-                GraduationYear = 2020,
-                College = "University of Technology",
-                Course = "Computer Science",
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow,
-                UserId = candidateUser.UserId
-            };
-            _context.CandidateProfiles.Add(candidate);
+            // 4. Delete login attempts (depends on users)
+            _context.UserLoginAttempts.RemoveRange(_context.UserLoginAttempts);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared login attempts");
 
-            // Create additional companies and recruiters for diverse job opportunities
-            var companies = new List<Company>
-            {
-                new Company
-                {
-                    Name = "Google Inc",
-                    Website = "https://google.com",
-                    Size = "10000+",
-                    Address = "1600 Amphitheatre Parkway, Mountain View, CA",
-                    Phone = "650-253-0000",
-                    CreatedDate = DateTime.UtcNow,
-                    IndustryID = industry.IndustryID
-                },
-                new Company
-                {
-                    Name = "Microsoft Corporation",
-                    Website = "https://microsoft.com",
-                    Size = "10000+",
-                    Address = "One Microsoft Way, Redmond, WA",
-                    Phone = "425-882-8080",
-                    CreatedDate = DateTime.UtcNow,
-                    IndustryID = industry.IndustryID
-                },
-                new Company
-                {
-                    Name = "Amazon Web Services",
-                    Website = "https://aws.amazon.com",
-                    Size = "10000+",
-                    Address = "410 Terry Ave N, Seattle, WA",
-                    Phone = "206-266-1000",
-                    CreatedDate = DateTime.UtcNow,
-                    IndustryID = industry.IndustryID
-                },
-                new Company
-                {
-                    Name = "Meta Platforms",
-                    Website = "https://meta.com",
-                    Size = "5000-10000",
-                    Address = "1 Hacker Way, Menlo Park, CA",
-                    Phone = "650-543-4800",
-                    CreatedDate = DateTime.UtcNow,
-                    IndustryID = industry.IndustryID
-                },
-                new Company
-                {
-                    Name = "Netflix Inc",
-                    Website = "https://netflix.com",
-                    Size = "5000-10000",
-                    Address = "100 Winchester Circle, Los Gatos, CA",
-                    Phone = "408-540-3700",
-                    CreatedDate = DateTime.UtcNow,
-                    IndustryID = industry.IndustryID
-                }
-            };
-            _context.Companies.AddRange(companies);
+            // 5. Delete grievances (depends on users)
+            _context.Grievances.RemoveRange(_context.Grievances);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared grievances");
 
-            // Create additional recruiters
-            var additionalRecruiters = new List<Recruiter>
-            {
-                new Recruiter
-                {
-                    FullName = "Sarah Johnson",
-                    Email = "sarah.johnson@google.com",
-                    PhoneNumber = "650-253-0001",
-                    CompanyID = companies[0].CompanyID,
-                    JobTitle = "Senior Talent Acquisition Manager",
-                    Bio = "Experienced in tech recruiting with focus on software engineering roles",
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                },
-                new Recruiter
-                {
-                    FullName = "Michael Chen",
-                    Email = "michael.chen@microsoft.com",
-                    PhoneNumber = "425-882-8081",
-                    CompanyID = companies[1].CompanyID,
-                    JobTitle = "Technical Recruiter",
-                    Bio = "Specialized in cloud computing and AI roles",
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                },
-                new Recruiter
-                {
-                    FullName = "Emily Rodriguez",
-                    Email = "emily.rodriguez@aws.amazon.com",
-                    PhoneNumber = "206-266-1001",
-                    CompanyID = companies[2].CompanyID,
-                    JobTitle = "Cloud Solutions Recruiter",
-                    Bio = "Expert in AWS cloud services and DevOps recruiting",
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                },
-                new Recruiter
-                {
-                    FullName = "David Kim",
-                    Email = "david.kim@meta.com",
-                    PhoneNumber = "650-543-4801",
-                    CompanyID = companies[3].CompanyID,
-                    JobTitle = "Product Recruiter",
-                    Bio = "Focused on product management and design roles",
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                },
-                new Recruiter
-                {
-                    FullName = "Lisa Thompson",
-                    Email = "lisa.thompson@netflix.com",
-                    PhoneNumber = "408-540-3701",
-                    CompanyID = companies[4].CompanyID,
-                    JobTitle = "Engineering Recruiter",
-                    Bio = "Passionate about streaming technology and content delivery",
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                }
-            };
-            _context.Recruiters.AddRange(additionalRecruiters);
+            // 6. Delete applications (depends on jobs and candidates)
+            _context.Applications.RemoveRange(_context.Applications);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared applications");
 
-            // Create diverse job opportunities
-            var jobs = new List<Job>
-            {
-                // Original job
-                new Job
-                {
-                    Title = "Software Developer",
-                    CompanyID = company.CompanyID,
-                    RecruiterID = recruiter.RecruiterID,
-                    Description = "We are looking for a skilled software developer to join our team. You will work on cutting-edge technologies and contribute to innovative projects.",
-                    Location = "New York, NY",
-                    SalaryRange = "$80,000 - $120,000",
-                    EmploymentType = "Full-time",
-                    Skills = "JavaScript, React, Node.js",
-                    PostedDate = DateTime.UtcNow,
-                    ClosingDate = DateTime.UtcNow.AddDays(30),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                // Google jobs
-                new Job
-                {
-                    Title = "Senior Software Engineer",
-                    CompanyID = companies[0].CompanyID,
-                    RecruiterID = additionalRecruiters[0].RecruiterID,
-                    Description = "Join Google's engineering team to build scalable systems that impact billions of users worldwide. Work on distributed systems, machine learning infrastructure, and cloud technologies.",
-                    Location = "Mountain View, CA",
-                    SalaryRange = "$150,000 - $250,000",
-                    EmploymentType = "Full-time",
-                    Skills = "C++, Java, Python, Distributed Systems, Machine Learning",
-                    PostedDate = DateTime.UtcNow.AddDays(-2),
-                    ClosingDate = DateTime.UtcNow.AddDays(28),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                new Job
-                {
-                    Title = "Product Manager",
-                    CompanyID = companies[0].CompanyID,
-                    RecruiterID = additionalRecruiters[0].RecruiterID,
-                    Description = "Drive product strategy and execution for Google's consumer products. Work closely with engineering teams to deliver innovative features and improve user experience.",
-                    Location = "San Francisco, CA",
-                    SalaryRange = "$130,000 - $200,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Product Management, Analytics, User Research, SQL",
-                    PostedDate = DateTime.UtcNow.AddDays(-1),
-                    ClosingDate = DateTime.UtcNow.AddDays(29),
-                    RemoteAllowed = false,
-                    Category = "Technology"
-                },
-                // Microsoft jobs
-                new Job
-                {
-                    Title = "Cloud Solutions Architect",
-                    CompanyID = companies[1].CompanyID,
-                    RecruiterID = additionalRecruiters[1].RecruiterID,
-                    Description = "Design and implement cloud solutions using Microsoft Azure. Help enterprise customers migrate to the cloud and optimize their infrastructure.",
-                    Location = "Seattle, WA",
-                    SalaryRange = "$140,000 - $220,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Azure, AWS, Cloud Architecture, DevOps, Kubernetes",
-                    PostedDate = DateTime.UtcNow.AddDays(-3),
-                    ClosingDate = DateTime.UtcNow.AddDays(27),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                new Job
-                {
-                    Title = "Data Scientist",
-                    CompanyID = companies[1].CompanyID,
-                    RecruiterID = additionalRecruiters[1].RecruiterID,
-                    Description = "Apply machine learning and statistical analysis to solve complex business problems. Work with large datasets and build predictive models.",
-                    Location = "Redmond, WA",
-                    SalaryRange = "$120,000 - $180,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Python, R, Machine Learning, SQL, Statistics",
-                    PostedDate = DateTime.UtcNow.AddDays(-1),
-                    ClosingDate = DateTime.UtcNow.AddDays(29),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                // AWS jobs
-                new Job
-                {
-                    Title = "DevOps Engineer",
-                    CompanyID = companies[2].CompanyID,
-                    RecruiterID = additionalRecruiters[2].RecruiterID,
-                    Description = "Build and maintain CI/CD pipelines, infrastructure as code, and automated deployment systems for AWS services.",
-                    Location = "Seattle, WA",
-                    SalaryRange = "$110,000 - $170,000",
-                    EmploymentType = "Full-time",
-                    Skills = "AWS, Terraform, Jenkins, Docker, Kubernetes",
-                    PostedDate = DateTime.UtcNow.AddDays(-4),
-                    ClosingDate = DateTime.UtcNow.AddDays(26),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                new Job
-                {
-                    Title = "Solutions Engineer",
-                    CompanyID = companies[2].CompanyID,
-                    RecruiterID = additionalRecruiters[2].RecruiterID,
-                    Description = "Help customers design and implement cloud solutions. Provide technical guidance and conduct product demonstrations.",
-                    Location = "Austin, TX",
-                    SalaryRange = "$100,000 - $160,000",
-                    EmploymentType = "Full-time",
-                    Skills = "AWS, Cloud Computing, Technical Sales, System Administration",
-                    PostedDate = DateTime.UtcNow.AddDays(-2),
-                    ClosingDate = DateTime.UtcNow.AddDays(28),
-                    RemoteAllowed = false,
-                    Category = "Technology"
-                },
-                // Meta jobs
-                new Job
-                {
-                    Title = "Frontend Engineer",
-                    CompanyID = companies[3].CompanyID,
-                    RecruiterID = additionalRecruiters[3].RecruiterID,
-                    Description = "Build beautiful and performant user interfaces for Meta's products. Work with React, GraphQL, and modern web technologies.",
-                    Location = "Menlo Park, CA",
-                    SalaryRange = "$130,000 - $200,000",
-                    EmploymentType = "Full-time",
-                    Skills = "React, JavaScript, GraphQL, CSS, TypeScript",
-                    PostedDate = DateTime.UtcNow.AddDays(-3),
-                    ClosingDate = DateTime.UtcNow.AddDays(27),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                new Job
-                {
-                    Title = "Machine Learning Engineer",
-                    CompanyID = companies[3].CompanyID,
-                    RecruiterID = additionalRecruiters[3].RecruiterID,
-                    Description = "Develop and deploy machine learning models at scale. Work on recommendation systems, computer vision, and natural language processing.",
-                    Location = "New York, NY",
-                    SalaryRange = "$140,000 - $220,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Python, TensorFlow, PyTorch, Machine Learning, Deep Learning",
-                    PostedDate = DateTime.UtcNow.AddDays(-1),
-                    ClosingDate = DateTime.UtcNow.AddDays(29),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                // Netflix jobs
-                new Job
-                {
-                    Title = "Senior Backend Engineer",
-                    CompanyID = companies[4].CompanyID,
-                    RecruiterID = additionalRecruiters[4].RecruiterID,
-                    Description = "Build scalable backend services for Netflix's streaming platform. Work with microservices architecture and handle millions of concurrent users.",
-                    Location = "Los Gatos, CA",
-                    SalaryRange = "$150,000 - $250,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Java, Spring Boot, Microservices, AWS, Cassandra",
-                    PostedDate = DateTime.UtcNow.AddDays(-5),
-                    ClosingDate = DateTime.UtcNow.AddDays(25),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                new Job
-                {
-                    Title = "Data Engineer",
-                    CompanyID = companies[4].CompanyID,
-                    RecruiterID = additionalRecruiters[4].RecruiterID,
-                    Description = "Design and maintain data pipelines for analytics and machine learning. Work with big data technologies and real-time streaming data.",
-                    Location = "Los Angeles, CA",
-                    SalaryRange = "$120,000 - $190,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Python, Spark, Kafka, SQL, Airflow",
-                    PostedDate = DateTime.UtcNow.AddDays(-2),
-                    ClosingDate = DateTime.UtcNow.AddDays(28),
-                    RemoteAllowed = false,
-                    Category = "Technology"
-                },
-                // Additional diverse jobs
-                new Job
-                {
-                    Title = "Full Stack Developer",
-                    CompanyID = company.CompanyID,
-                    RecruiterID = recruiter.RecruiterID,
-                    Description = "Develop end-to-end web applications using modern technologies. Work on both frontend and backend components.",
-                    Location = "Austin, TX",
-                    SalaryRange = "$90,000 - $140,000",
-                    EmploymentType = "Full-time",
-                    Skills = "JavaScript, Angular, Node.js, MongoDB, Express",
-                    PostedDate = DateTime.UtcNow.AddDays(-1),
-                    ClosingDate = DateTime.UtcNow.AddDays(29),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                },
-                new Job
-                {
-                    Title = "UI/UX Designer",
-                    CompanyID = companies[3].CompanyID,
-                    RecruiterID = additionalRecruiters[3].RecruiterID,
-                    Description = "Create intuitive and beautiful user experiences. Conduct user research, design interfaces, and collaborate with product teams.",
-                    Location = "San Francisco, CA",
-                    SalaryRange = "$100,000 - $160,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Figma, Sketch, User Research, Prototyping, Design Systems",
-                    PostedDate = DateTime.UtcNow.AddDays(-3),
-                    ClosingDate = DateTime.UtcNow.AddDays(27),
-                    RemoteAllowed = true,
-                    Category = "Design"
-                },
-                new Job
-                {
-                    Title = "Cybersecurity Analyst",
-                    CompanyID = companies[1].CompanyID,
-                    RecruiterID = additionalRecruiters[1].RecruiterID,
-                    Description = "Protect organizational information systems. Monitor for security threats, conduct vulnerability assessments, and implement security measures.",
-                    Location = "Washington, DC",
-                    SalaryRange = "$95,000 - $150,000",
-                    EmploymentType = "Full-time",
-                    Skills = "Network Security, SIEM, Penetration Testing, CISSP, Incident Response",
-                    PostedDate = DateTime.UtcNow.AddDays(-4),
-                    ClosingDate = DateTime.UtcNow.AddDays(26),
-                    RemoteAllowed = false,
-                    Category = "Security"
-                },
-                new Job
-                {
-                    Title = "Mobile App Developer",
-                    CompanyID = companies[0].CompanyID,
-                    RecruiterID = additionalRecruiters[0].RecruiterID,
-                    Description = "Develop native and cross-platform mobile applications. Work with iOS and Android platforms using modern development frameworks.",
-                    Location = "Sunnyvale, CA",
-                    SalaryRange = "$110,000 - $180,000",
-                    EmploymentType = "Full-time",
-                    Skills = "React Native, Flutter, iOS, Android, Swift, Kotlin",
-                    PostedDate = DateTime.UtcNow.AddDays(-2),
-                    ClosingDate = DateTime.UtcNow.AddDays(28),
-                    RemoteAllowed = true,
-                    Category = "Technology"
-                }
-            };
-            _context.Jobs.AddRange(jobs);
+            // 7. Delete jobs (depends on recruiters and companies)
+            _context.Jobs.RemoveRange(_context.Jobs);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared jobs");
 
-            // Create sample applications for the test candidate
-            var applications = new List<Application>
-            {
-                new Application
-                {
-                    JobID = jobs[0].JobID, // Software Developer at Tech Solutions Inc
-                    CandidateID = candidate.CandidateID,
-                    Status = "Applied",
-                    AppliedDate = DateTime.UtcNow.AddDays(-5),
-                    CoverLetter = "I am excited to apply for the Software Developer position at Tech Solutions Inc. With my experience in JavaScript and React, I am confident I can contribute to your innovative projects.",
-                    ResumeUrl = "/uploads/resumes/jane_doe_resume.pdf"
-                },
-                new Application
-                {
-                    JobID = jobs[1].JobID, // Senior Software Engineer at Google
-                    CandidateID = candidate.CandidateID,
-                    Status = "Interview Scheduled",
-                    AppliedDate = DateTime.UtcNow.AddDays(-3),
-                    CoverLetter = "I would love to join Google's engineering team and work on distributed systems that impact billions of users. My background in C++ and Python aligns well with your requirements.",
-                    ResumeUrl = "/uploads/resumes/jane_doe_resume.pdf",
-                    InterviewStatus = "Interview scheduled for October 25, 2024 at 2:00 PM PST"
-                },
-                new Application
-                {
-                    JobID = jobs[3].JobID, // Cloud Solutions Architect at Microsoft
-                    CandidateID = candidate.CandidateID,
-                    Status = "Shortlisted",
-                    AppliedDate = DateTime.UtcNow.AddDays(-2),
-                    CoverLetter = "My experience with Azure and cloud architecture makes me a strong candidate for this Cloud Solutions Architect role at Microsoft.",
-                    ResumeUrl = "/uploads/resumes/jane_doe_resume.pdf"
-                },
-                new Application
-                {
-                    JobID = jobs[6].JobID, // Solutions Engineer at AWS
-                    CandidateID = candidate.CandidateID,
-                    Status = "Rejected",
-                    AppliedDate = DateTime.UtcNow.AddDays(-7),
-                    CoverLetter = "I am interested in the Solutions Engineer position at AWS and would enjoy helping customers design cloud solutions.",
-                    ResumeUrl = "/uploads/resumes/jane_doe_resume.pdf"
-                },
-                new Application
-                {
-                    JobID = jobs[10].JobID, // Full Stack Developer at Tech Solutions Inc
-                    CandidateID = candidate.CandidateID,
-                    Status = "Applied",
-                    AppliedDate = DateTime.UtcNow.AddDays(-1),
-                    CoverLetter = "As a full stack developer with experience in Angular and Node.js, I am eager to contribute to your web application development projects.",
-                    ResumeUrl = "/uploads/resumes/jane_doe_resume.pdf"
-                }
-            };
-            _context.Applications.AddRange(applications);
+            // 8. Delete recruiters (depends on users and companies)
+            _context.Recruiters.RemoveRange(_context.Recruiters);
             await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared recruiters");
 
-            return Ok(new
-            {
-                Message = "Test data created successfully",
-                CompanyId = company.CompanyID,
-                RecruiterId = recruiter.RecruiterID,
-                CandidateId = candidate.CandidateID,
-                JobsCreated = jobs.Count,
-                ApplicationsCreated = applications.Count,
-                RecruiterUserId = recruiterUser.UserId,
-                CandidateUserId = candidateUser.UserId
+            // 9. Delete candidate profiles (depends on users)
+            _context.CandidateProfiles.RemoveRange(_context.CandidateProfiles);
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared candidate profiles");
+
+            // 10. Delete resumes (depends on users)
+            _context.Resumes.RemoveRange(_context.Resumes);
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared resumes");
+
+            // 11. Delete companies (no dependencies now)
+            _context.Companies.RemoveRange(_context.Companies);
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared companies");
+
+            // 12. Delete users (no dependencies now)
+            _context.Users.RemoveRange(_context.Users);
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared users");
+
+            // 13. Delete lookup tables
+            _context.IndustryLookups.RemoveRange(_context.IndustryLookups);
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared industry lookups");
+
+            // 14. Delete location type lookups
+            _context.Set<LocationTypeLookup>().RemoveRange(_context.Set<LocationTypeLookup>());
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared location type lookups");
+
+            // 15. Delete job type lookups
+            _context.Set<JobTypeLookup>().RemoveRange(_context.Set<JobTypeLookup>());
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared job type lookups");
+
+            // 16. Delete status lookups
+            _context.Set<StatusLookup>().RemoveRange(_context.Set<StatusLookup>());
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared status lookups");
+
+            // 17. Delete interview status lookups
+            _context.Set<InterviewStatusLookup>().RemoveRange(_context.Set<InterviewStatusLookup>());
+            await _context.SaveChangesAsync();
+            Console.WriteLine("✓ Cleared interview status lookups");
+
+            Console.WriteLine("✅ Data reset completed successfully");
+            return Ok(new {
+                message = "All data has been permanently deleted from the database",
+                warning = "This action cannot be undone",
+                timestamp = DateTime.Now
             });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Error seeding data: {ex.Message}");
+            Console.WriteLine($"❌ Error resetting data: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            return StatusCode(500, new {
+                message = "Error resetting data",
+                error = ex.Message,
+                timestamp = DateTime.Now
+            });
         }
     }
+
+    // PRODUCTION: Data seeding endpoint removed for security
+    // Uncomment below for development only
+
+    /*
+    [HttpPost("data")]
+    public async Task<IActionResult> SeedData()
+    {
+        // ... entire method commented out for production
+    }
+    */
 }

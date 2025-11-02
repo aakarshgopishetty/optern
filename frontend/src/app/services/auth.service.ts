@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap, throwError, map, catchError } from 'rxjs';
 
 export interface User {
@@ -9,6 +9,7 @@ export interface User {
   email: string;
   phoneNumber?: string;
   token?: string;
+  createdAt?: Date;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -25,21 +26,20 @@ export class AuthService {
   private initializeAuth() {
     // hydrate from localStorage if available
     const raw = localStorage.getItem('optern_user');
-    console.log('AuthService constructor - raw localStorage data:', raw);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        console.log('Parsed user from localStorage:', parsed);
+        // Parse createdAt back to Date object if it exists
+        if (parsed.createdAt) {
+          parsed.createdAt = new Date(parsed.createdAt);
+        }
         this.currentUserSubject.next(parsed);
         this.initialized = true;
       } catch (error) {
-        console.error('Error parsing user from localStorage:', error);
         localStorage.removeItem('optern_user');
         this.initialized = true;
       }
     } else {
-      console.log('No user data found in localStorage, initializing without fallback user');
-      // Don't set fallback test user - let the user login properly
       this.currentUserSubject.next(null);
       this.initialized = true;
     }
@@ -47,23 +47,32 @@ export class AuthService {
 
   // Method to initialize authentication asynchronously
   async initializeAsyncAuth(): Promise<void> {
-    if (this.initialized) return;
-
-    console.log('Async auth initialization completed');
-    this.initialized = true;
+    // Ensure initialization is complete
+    if (!this.initialized) {
+      this.initializeAuth();
+    }
+    // No artificial delay needed - initialization is synchronous
   }
 
   login(email: string, password: string) {
     // Backend expects PascalCase property names
     const payload = { Email: email, Password: password };
-    console.log('Attempting login for:', email);
-    return this.http.post<any>('/api/Auth/login', payload, {
+    // TEMPORARILY BYPASS PROXY - Use direct API URL
+    return this.http.post<any>('http://localhost:5001/api/Auth/login', payload, {
       headers: {
         'Content-Type': 'application/json'
       }
     }).pipe(
+      tap((response) => {
+        console.log('Login response received:', response);
+        console.log('Response type:', typeof response);
+        console.log('Response keys:', Object.keys(response || {}));
+      }),
       map((response) => {
-        console.log('Raw login response:', response);
+        console.log('Processing response:', response);
+
+        // TEMPORARILY DISABLE VALIDATION TO DEBUG
+        console.log('Response validation disabled for debugging');
 
         // Handle different response structures
         let serverUser;
@@ -75,51 +84,53 @@ export class AuthService {
           serverUser = response;
         }
 
-        console.log('Extracted user data:', serverUser);
+        console.log('Server user:', serverUser);
 
         if (!serverUser) {
-          console.error('No user data in response');
           throw new Error('No user data in response');
         }
 
-        // Backend returns PascalCase (UserId, Role, Username, Email)
+        // Backend returns PascalCase (UserId, Role, Username, Email, CreatedAt)
         // Map to our frontend User interface with better fallback handling
         const user: User = {
           userId: serverUser.UserId || serverUser.userId || 0,
           role: serverUser.Role || serverUser.role || '',
           username: serverUser.Username || serverUser.username || serverUser.Email || serverUser.email || '',
           email: serverUser.Email || serverUser.email || '',
+          phoneNumber: serverUser.PhoneNumber || serverUser.phoneNumber || '',
+          createdAt: serverUser.CreatedAt ? new Date(serverUser.CreatedAt) : undefined,
           token: response.token
         };
 
-        console.log('Final mapped user:', user);
+        console.log('Mapped user:', user);
 
         if (user.userId > 0) {
-          console.log('Setting current user in BehaviorSubject:', user);
           this.currentUserSubject.next(user);
-          console.log('Current user after setting:', this.currentUserSubject.value);
+          // Store user data including token for authentication
+          const userData = {
+            userId: user.userId,
+            role: user.role,
+            username: user.username,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            createdAt: user.createdAt,
+            token: user.token
+          };
           try {
-            localStorage.setItem('optern_user', JSON.stringify(user));
-            console.log('User saved to localStorage successfully');
+            localStorage.setItem('optern_user', JSON.stringify(userData));
           } catch (e) {
             console.error('Failed to save user to localStorage:', e);
           }
         } else {
-          console.error('Invalid user data - userId is 0 or missing');
           throw new Error('Invalid user data');
         }
 
         return response;
       }),
       catchError((error) => {
-        // Log error for debugging but don't expose internal details
         console.error('Login error:', error);
-        console.error('Error details:', {
-          status: error.status,
-          statusText: error.statusText,
-          error: error.error,
-          message: error.message
-        });
+        console.error('Error response:', error.error);
+        console.error('Error status:', error.status);
         return throwError(() => error);
       })
     );
@@ -147,7 +158,6 @@ export class AuthService {
   changePassword(currentPassword: string, newPassword: string) {
     const currentUser = this.getCurrentUser();
     if (!currentUser || !currentUser.userId || !currentUser.token) {
-      console.error('Change password failed: No user logged in or no token');
       return throwError(() => new Error('Please log in to change your password'));
     }
 
@@ -155,7 +165,6 @@ export class AuthService {
       CurrentPassword: currentPassword,
       NewPassword: newPassword
     };
-    console.log('Attempting password change for user:', currentUser.userId);
     return this.http.post('/api/Auth/change-password', payload, {
       headers: {
         'Content-Type': 'application/json',
@@ -165,11 +174,18 @@ export class AuthService {
   }
 
   updateCurrentUser(updatedUser: User) {
-    console.log('Updating current user:', updatedUser);
     this.currentUserSubject.next(updatedUser);
     try {
-      localStorage.setItem('optern_user', JSON.stringify(updatedUser));
-      console.log('Updated user saved to localStorage');
+      const userData = {
+        userId: updatedUser.userId,
+        role: updatedUser.role,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        phoneNumber: updatedUser.phoneNumber,
+        createdAt: updatedUser.createdAt,
+        token: updatedUser.token
+      };
+      localStorage.setItem('optern_user', JSON.stringify(userData));
     } catch (e) {
       console.error('Failed to save updated user to localStorage:', e);
     }
@@ -178,11 +194,9 @@ export class AuthService {
   getActiveSessions() {
     const currentUser = this.getCurrentUser();
     if (!currentUser || !currentUser.token) {
-      console.error('Get active sessions failed: No user logged in or no token');
       return throwError(() => new Error('Please log in to view active sessions'));
     }
 
-    console.log('Fetching active sessions for user:', currentUser.userId);
     return this.http.get('/api/Auth/active-sessions', {
       headers: {
         'Authorization': `Bearer ${currentUser.token}`
@@ -193,11 +207,9 @@ export class AuthService {
   revokeSession(sessionId: string) {
     const currentUser = this.getCurrentUser();
     if (!currentUser || !currentUser.token) {
-      console.error('Revoke session failed: No user logged in or no token');
       return throwError(() => new Error('Please log in to revoke sessions'));
     }
 
-    console.log('Revoking session:', sessionId);
     return this.http.post(`/api/Auth/revoke-session/${sessionId}`, {}, {
       headers: {
         'Authorization': `Bearer ${currentUser.token}`
@@ -208,11 +220,9 @@ export class AuthService {
   revokeAllSessions() {
     const currentUser = this.getCurrentUser();
     if (!currentUser || !currentUser.token) {
-      console.error('Revoke all sessions failed: No user logged in or no token');
       return throwError(() => new Error('Please log in to revoke sessions'));
     }
 
-    console.log('Revoking all other sessions for user:', currentUser.userId);
     return this.http.post('/api/Auth/revoke-all-sessions', {}, {
       headers: {
         'Authorization': `Bearer ${currentUser.token}`

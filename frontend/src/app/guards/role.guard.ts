@@ -11,28 +11,39 @@ export function roleGuard(allowedRole: string) {
     await authService.initializeAsyncAuth();
 
     const user = authService.getCurrentUser();
-    console.log('Role guard check - user:', user);
+
+
 
     if (!user || !user.userId || !user.token) {
-      console.log('Role guard: No valid user found, redirecting to login');
+      console.log('Role guard: No valid user, redirecting to login');
       // Redirect to appropriate login page if no valid user
-      const loginRoute = allowedRole === 'recruiter' ? '/recruiter/sign-in' : '/candidate/sign-in';
+      const loginRoute = allowedRole === 'recruiter' ? '/recruiter/sign-in' :
+                        allowedRole === 'admin' ? '/admin/sign-in' : '/candidate/sign-in';
       router.navigate([loginRoute]);
       return false;
     }
 
     // Map backend roles to frontend expected roles (case-insensitive)
-    const mappedRole = user.role?.toLowerCase() === 'student' ? 'candidate' : user.role?.toLowerCase();
+    const roleLower = user.role?.toLowerCase();
+    const mappedRole = roleLower === 'student' ? 'candidate' : roleLower;
+
+    console.log('Role guard: Role check', {
+      userRole: user.role,
+      mappedRole,
+      allowedRole,
+      roleMatch: mappedRole === allowedRole
+    });
 
     if (mappedRole !== allowedRole) {
-      console.log(`Role guard: User role '${user.role}' (mapped to '${mappedRole}') does not match required role '${allowedRole}'`);
+      console.log('Role guard: Role mismatch, logging out');
       authService.logout(); // Force logout for wrong role
-      const loginRoute = allowedRole === 'recruiter' ? '/recruiter/sign-in' : '/candidate/sign-in';
+      const loginRoute = allowedRole === 'recruiter' ? '/recruiter/sign-in' :
+                        allowedRole === 'admin' ? '/admin/sign-in' : '/candidate/sign-in';
       router.navigate([loginRoute]);
       return false;
     }
 
-    console.log(`Role guard: Access granted for ${user.role} user`);
+    console.log('Role guard: Access granted');
     return true;
   };
 }

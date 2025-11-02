@@ -362,8 +362,6 @@ export class ResumeBuilder implements OnInit {
     // More detailed error handling
     if (error.status === 400) {
       this.showMessage('Invalid resume data. Please check all required fields.', 'error');
-    } else if (error.status === 401) {
-      this.showMessage('Authentication failed. Please log in again.', 'error');
     } else if (error.status === 500) {
       this.showMessage('Server error. Please try again later.', 'error');
     } else {

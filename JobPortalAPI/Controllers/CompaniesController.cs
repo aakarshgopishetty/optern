@@ -53,12 +53,57 @@ public class CompaniesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, Company company)
+    public async Task<IActionResult> Update(int id, [FromBody] CompanyUpdateDto companyUpdate)
     {
-        if (id != company.CompanyID) return BadRequest();
-        _context.Entry(company).State = EntityState.Modified;
+        var company = await _context.Companies.FindAsync(id);
+        if (company == null)
+        {
+            return NotFound();
+        }
+
+        Console.WriteLine($"UpdateCompany called for ID {id}");
+        Console.WriteLine($"Received data: Name={companyUpdate.Name}, Website={companyUpdate.Website}, Address={companyUpdate.Address}, Size={companyUpdate.Size}, Founded={companyUpdate.Founded}, Description={companyUpdate.Description}");
+
+        // Update company fields based on the provided data
+        if (!string.IsNullOrEmpty(companyUpdate.Name))
+        {
+            Console.WriteLine($"Updating company name from '{company.Name}' to '{companyUpdate.Name}'");
+            company.Name = companyUpdate.Name;
+        }
+        if (!string.IsNullOrEmpty(companyUpdate.Website))
+        {
+            Console.WriteLine($"Updating company website from '{company.Website}' to '{companyUpdate.Website}'");
+            company.Website = companyUpdate.Website;
+        }
+        if (!string.IsNullOrEmpty(companyUpdate.Address))
+        {
+            Console.WriteLine($"Updating company address from '{company.Address}' to '{companyUpdate.Address}'");
+            company.Address = companyUpdate.Address;
+        }
+        if (!string.IsNullOrEmpty(companyUpdate.Size))
+        {
+            Console.WriteLine($"Updating company size from '{company.Size}' to '{companyUpdate.Size}'");
+            company.Size = companyUpdate.Size;
+        }
+        if (companyUpdate.Founded != null)
+        {
+            Console.WriteLine($"Updating company founded from '{company.Founded}' to '{companyUpdate.Founded}'");
+            company.Founded = companyUpdate.Founded;
+        }
+        if (!string.IsNullOrEmpty(companyUpdate.Description))
+        {
+            Console.WriteLine($"Updating company description from '{company.Description}' to '{companyUpdate.Description}'");
+            company.Description = companyUpdate.Description;
+        }
+        if (companyUpdate.IndustryID.HasValue)
+        {
+            Console.WriteLine($"Updating company industry from '{company.IndustryID}' to '{companyUpdate.IndustryID}'");
+            company.IndustryID = companyUpdate.IndustryID.Value;
+        }
+
         await _context.SaveChangesAsync();
-        return NoContent();
+        Console.WriteLine("Company updated successfully");
+        return Ok(new { message = "Company updated successfully" });
     }
 
     [HttpDelete("{id}")]

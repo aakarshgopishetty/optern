@@ -9,14 +9,49 @@
   </div>
 
   <!-- Error State -->
-  <div class="error-message" *ngIf="!isLoading && errorMessage">
-    <div class="error-content">
+  <div class="error-overlay" *ngIf="!isLoading && errorMessage">
+    <div class="error-card">
+      <div class="error-header">
+        <i class="bi bi-exclamation-triangle-fill error-icon"></i>
+        <h3 class="error-title">Unable to Load Profile</h3>
+      </div>
+      <div class="error-body">
+        <p class="error-description">
+          We're experiencing issues loading your recruiter profile. This could be due to:
+        </p>
+        <ul class="error-reasons">
+          <li>Network connectivity issues</li>
+          <li>Authentication token expired</li>
+          <li>Server temporarily unavailable</li>
+          <li>Missing recruiter profile data</li>
+        </ul>
+        <div class="error-details">
+          <strong>Technical Details:</strong> {{ errorMessage }}
+        </div>
+      </div>
+      <div class="error-actions">
+        <button class="retry-btn" (click)="reloadProfile()">
+          <i class="bi bi-arrow-clockwise"></i> Try Again
+        </button>
+        <button class="logout-btn" (click)="logout()">
+          <i class="bi bi-box-arrow-right"></i> Logout & Login Again
+        </button>
+        <button class="dismiss-btn" (click)="errorMessage = null">
+          <i class="bi bi-x"></i> Dismiss
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success/Error Messages -->
+  <div class="message-container" *ngIf="!isLoading && (successMessage || errorMessage)">
+    <div class="success-message" *ngIf="successMessage">
+      <i class="bi bi-check-circle"></i>
+      {{ successMessage }}
+    </div>
+    <div class="error-message" *ngIf="errorMessage && !isLoading">
       <i class="bi bi-exclamation-triangle"></i>
-      <h3>Failed to Load Profile</h3>
-      <p>{{ errorMessage }}</p>
-      <button class="retry-btn" (click)="reloadProfile()">
-        <i class="bi bi-arrow-clockwise"></i> Retry Loading
-      </button>
+      {{ errorMessage }}
     </div>
   </div>
 
@@ -32,8 +67,11 @@
       <span class="edit-icon">✏</span> Edit Profile
     </button>
     <div class="edit-actions" *ngIf="isEditMode">
-      <button class="cancel-btn" (click)="cancelEdit()">Cancel</button>
-      <button class="save-btn" (click)="saveProfile()">Save Changes</button>
+      <button class="cancel-btn" (click)="cancelEdit()" [disabled]="isSaving">Cancel</button>
+      <button class="save-btn" (click)="saveProfile()" [disabled]="isSaving">
+        <span *ngIf="isSaving">Saving...</span>
+        <span *ngIf="!isSaving">Save Changes</span>
+      </button>
     </div>
   </div>
 
@@ -53,7 +91,7 @@
             <span class="icon">✉</span>
             {{ userProfile.email }}
           </span>
-          <span class="meta-item">
+          <span class="meta-item" *ngIf="userProfile.memberSince">
             <span class="icon">📅</span>
             {{ userProfile.memberSince }}
           </span>
@@ -154,14 +192,26 @@
             <label class="info-label">Position</label>
             <div class="info-value-with-icon">
               <span class="value-icon">💼</span>
-              <p class="info-value">{{ personalInfo.position }}</p>
+              <input
+                *ngIf="isEditMode"
+                type="text"
+                class="info-input"
+                [(ngModel)]="personalInfo.position"
+                placeholder="Enter your position">
+              <p *ngIf="!isEditMode" class="info-value">{{ personalInfo.position }}</p>
             </div>
           </div>
 
           <!-- Department -->
           <div class="info-item">
             <label class="info-label">Department</label>
-            <p class="info-value">{{ personalInfo.department }}</p>
+            <input
+              *ngIf="isEditMode"
+              type="text"
+              class="info-input"
+              [(ngModel)]="personalInfo.department"
+              placeholder="Enter your department">
+            <p *ngIf="!isEditMode" class="info-value">{{ personalInfo.department }}</p>
           </div>
 
           <!-- Join Date -->
@@ -192,7 +242,7 @@
 
         <div class="company-main-info">
           <div class="company-header">
-            <div class="company-icon">🚀</div>
+            <div class="company-icon">{{ companyInitials }}</div>
             <div>
               <input
                 *ngIf="isEditMode"
@@ -201,14 +251,6 @@
                 [(ngModel)]="companyInfo.name"
                 placeholder="Company Name">
               <h4 *ngIf="!isEditMode" class="company-name">{{ companyInfo.name }}</h4>
-
-              <input
-                *ngIf="isEditMode"
-                type="text"
-                class="company-industry-input"
-                [(ngModel)]="companyInfo.industry"
-                placeholder="Industry">
-              <p *ngIf="!isEditMode" class="company-industry">{{ companyInfo.industry }}</p>
             </div>
           </div>
 
@@ -258,60 +300,25 @@
             </div>
 
             <div class="company-detail-item">
-              <span class="detail-icon">📅</span>
+              <span class="detail-icon">📝</span>
               <div>
-                <label class="detail-label">Founded</label>
-                <input
+                <label class="detail-label">Description</label>
+                <textarea
                   *ngIf="isEditMode"
-                  type="text"
-                  class="detail-input"
-                  [(ngModel)]="companyInfo.founded"
-                  placeholder="2020">
-                <p *ngIf="!isEditMode" class="detail-value">{{ companyInfo.founded }}</p>
+                  class="about-textarea"
+                  [(ngModel)]="companyInfo.description"
+                  placeholder="Brief description of your company..."
+                  rows="3"></textarea>
+                <p *ngIf="!isEditMode" class="detail-value">{{ companyInfo.description || 'No description provided' }}</p>
               </div>
             </div>
+
           </div>
 
-          <!-- Benefits -->
-          <div class="benefits-section">
-            <label class="detail-label">Benefits</label>
-            <input
-              *ngIf="isEditMode"
-              type="text"
-              class="benefits-input"
-              [(ngModel)]="companyInfo.benefitsString"
-              placeholder="Health Insurance, Flexible Work, Stock Options (comma separated)">
-            <div *ngIf="!isEditMode" class="benefits-tags">
-              <span class="benefit-tag" *ngFor="let benefit of companyInfo.benefits">
-                {{ benefit }}
-              </span>
-            </div>
-          </div>
+
         </div>
 
-        <!-- About Company -->
-        <div class="company-about">
-          <h4 class="about-title">About Our Company</h4>
-          <textarea
-            *ngIf="isEditMode"
-            class="about-textarea"
-            [(ngModel)]="companyInfo.about"
-            rows="4"
-            placeholder="Describe your company..."></textarea>
-          <p *ngIf="!isEditMode" class="about-text">{{ companyInfo.about }}</p>
-        </div>
 
-        <!-- Company Culture -->
-        <div class="company-culture">
-          <h4 class="about-title">Company Culture</h4>
-          <textarea
-            *ngIf="isEditMode"
-            class="about-textarea"
-            [(ngModel)]="companyInfo.culture"
-            rows="4"
-            placeholder="Describe your company culture..."></textarea>
-          <p *ngIf="!isEditMode" class="about-text">{{ companyInfo.culture }}</p>
-        </div>
       </div>
     </div>
 

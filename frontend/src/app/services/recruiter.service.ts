@@ -9,6 +9,7 @@ export interface RecruiterProfile {
   jobTitle: string;
   phoneNumber: string;
   bio: string;
+  createdDate: string;
   companyID: number;
   company?: {
     companyID: number;
@@ -17,6 +18,8 @@ export interface RecruiterProfile {
     size: string;
     address: string;
     phone: string;
+    founded: string;
+    description: string;
     industryID: number;
     industry?: {
       industryID: number;
@@ -39,4 +42,3 @@ export class RecruiterService {
     return this.http.put<RecruiterProfile>(`${this.baseUrl}/profile`, profile);
   }
 }
-

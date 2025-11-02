@@ -2,7 +2,9 @@ import { Component, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApplicationService } from '../../services/application.service';
+import { ProfileService } from '../../services/profile.service';
 import { SignalRService } from '../../services/signalr.service';
+import { AlertService } from '../../services/alert.service';
 import { Subscription } from 'rxjs';
 
 // Interface for Candidate data structure
@@ -58,49 +60,25 @@ export class RecruiterCandidatesComponent implements OnInit, OnDestroy {
   viewMode: 'grid' | 'list' = 'grid';
 
   // Modal visibility states
-  showSearchHistoryModal: boolean = false;
   showProfileModal: boolean = false;
   showFilters: boolean = false;
+
+  // Filter properties
+  statusFilter: string = '';
+  experienceFilter: string = '';
+  locationFilter: string = '';
 
   // Selected candidate for profile modal
   selectedCandidate: Candidate | null = null;
 
-  // Search history data (keeping for now, but could be fetched from API)
-  searchHistory: SearchHistory[] = [
-    {
-      id: 1,
-      title: 'React TypeScript',
-      skills: 'React, TypeScript',
-      experience: '3-5 years',
-      location: 'San Francisco',
-      resultsCount: 8,
-      timestamp: '2024-01-22 14:30'
-    },
-    {
-      id: 2,
-      title: 'Data Science Python',
-      skills: 'Python, Machine Learning',
-      experience: '2+ years',
-      location: '',
-      resultsCount: 12,
-      timestamp: '2024-01-21 10:15'
-    },
-    {
-      id: 3,
-      title: 'UX Designer Figma',
-      skills: 'Figma, Prototyping',
-      experience: '4+ years',
-      location: 'Remote',
-      resultsCount: 5,
-      timestamp: '2024-01-20 16:45'
-    }
-  ];
-
   // Candidates data - now fetched from API
   candidates: Candidate[] = [];
+  filteredCandidates: Candidate[] = [];
 
   private applicationService = inject(ApplicationService);
+  private profileService = inject(ProfileService);
   private signalRService = inject(SignalRService);
+  private alertService = inject(AlertService);
   private subscription: Subscription = new Subscription();
 
   constructor() {
@@ -139,41 +117,65 @@ export class RecruiterCandidatesComponent implements OnInit, OnDestroy {
   }
 
   private loadCandidates() {
-    this.applicationService.getByRecruiter().subscribe({
-      next: (applications) => {
-        // Map applications to candidates
-        this.candidates = (applications || []).map((app, index) => ({
-          id: app.CandidateID,
-          name: app.Candidate?.FullName || 'Unknown Candidate',
-          role: app.Job?.Title || 'Unknown Position',
-          email: app.Candidate?.Email || '',
-          avatarLetter: (app.Candidate?.FullName || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase(),
-          avatarColor: this.getRandomColor(),
-          location: app.Candidate?.Address || 'Not specified',
-          experience: 'Not specified', // Could be added to candidate profile
-          degree: 'Not specified',
-          skills: [], // Could be added to candidate profile
-          extraSkillsCount: 0,
-          education: 'Not specified',
-          views: 0, // Default
-          status: 'available' as const, // Default
-          workExperience: [], // Could be added
-          applicationID: app.ApplicationID,
-          jobID: app.JobID,
-          candidateID: app.CandidateID,
-          appliedDate: app.AppliedDate
-        }));
+    console.log('Loading candidates from ProfileService...');
+    this.profileService.getAllCandidates().subscribe({
+      next: (candidateProfiles) => {
+        console.log('Received candidate profiles:', candidateProfiles);
+        // Map candidate profiles to candidates
+        this.candidates = (candidateProfiles || []).map((profile, index) => {
+          // Generate avatar letter from name, handling edge cases
+          let avatarLetter = 'U'; // Default
+          if (profile.fullName && profile.fullName.trim()) {
+            const nameParts = profile.fullName.trim().split(' ').filter(part => part.length > 0);
+            if (nameParts.length >= 2) {
+              // Take first letter of first and last name
+              avatarLetter = (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+            } else if (nameParts.length === 1) {
+              // Take first letter of single name
+              avatarLetter = nameParts[0][0].toUpperCase();
+            }
+          }
+
+          return {
+            id: profile.candidateID,
+            name: profile.fullName && profile.fullName.trim() ? profile.fullName : 'Unknown Candidate',
+            role: `${profile.course || 'Student'} at ${profile.college || 'Unknown Institution'}`,
+            email: profile.email || '',
+            avatarLetter: avatarLetter,
+            avatarColor: this.getConsistentColor(profile.candidateID),
+            location: profile.address || 'Not specified',
+            experience: profile.graduationYear ? `Expected graduation: ${profile.graduationYear}` : 'Not specified',
+            degree: profile.course || 'Not specified',
+            skills: [], // Could be populated from skills table if available
+            extraSkillsCount: 0,
+            education: `${profile.course || 'Not specified'} - ${profile.college || 'Not specified'}`,
+            views: 0, // Default
+            status: 'available' as const, // Default - could be derived from profile status
+            workExperience: [], // Could be populated from experience table if available
+            applicationID: 0, // Not applicable for all candidates view
+            jobID: 0, // Not applicable for all candidates view
+            candidateID: profile.candidateID,
+            appliedDate: '' // Not applicable for all candidates view
+          };
+        });
+
+        console.log('Mapped candidates:', this.candidates);
+        // Initialize filtered candidates
+        this.filteredCandidates = [...this.candidates];
+        console.log('Filtered candidates count:', this.filteredCandidates.length);
       },
       error: (err) => {
-        console.warn('Failed to load candidates', err);
+        console.error('Failed to load candidates', err);
         this.candidates = [];
+        this.filteredCandidates = [];
       }
     });
   }
 
-  private getRandomColor(): string {
+  private getConsistentColor(candidateId: number): string {
     const colors = ['orange', 'purple', 'blue', 'green', 'red', 'teal'];
-    return colors[Math.floor(Math.random() * colors.length)];
+    // Use candidate ID to ensure consistent color assignment
+    return colors[candidateId % colors.length];
   }
   
   // === PUBLIC METHODS ===
@@ -225,9 +227,68 @@ export class RecruiterCandidatesComponent implements OnInit, OnDestroy {
    */
   onSearch(): void {
     console.log('Search query:', this.searchQuery);
-    // For now, just refresh candidates - in a real implementation,
-    // this would send the search query to the API
-    this.refreshCandidates();
+    this.applyFilters();
+  }
+
+  /**
+   * Apply search and filter logic
+   */
+  applyFilters(): void {
+    let filtered = [...this.candidates];
+
+    // Apply search filter
+    if (this.searchQuery.trim()) {
+      const query = this.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(candidate =>
+        candidate.name.toLowerCase().includes(query) ||
+        candidate.email.toLowerCase().includes(query) ||
+        candidate.role.toLowerCase().includes(query) ||
+        candidate.location.toLowerCase().includes(query) ||
+        candidate.skills.some(skill => skill.toLowerCase().includes(query))
+      );
+    }
+
+    // Apply status filter
+    if (this.statusFilter) {
+      filtered = filtered.filter(candidate => candidate.status === this.statusFilter);
+    }
+
+    // Apply experience filter
+    if (this.experienceFilter) {
+      filtered = filtered.filter(candidate => {
+        // Since experience is stored as string, we'll do basic matching
+        const exp = candidate.experience.toLowerCase();
+        if (this.experienceFilter === 'entry') {
+          return exp.includes('entry') || exp.includes('0-2') || exp.includes('junior');
+        } else if (this.experienceFilter === 'mid') {
+          return exp.includes('mid') || exp.includes('3-5') || exp.includes('intermediate');
+        } else if (this.experienceFilter === 'senior') {
+          return exp.includes('senior') || exp.includes('6+') || exp.includes('lead') || exp.includes('principal');
+        }
+        return true;
+      });
+    }
+
+    // Apply location filter
+    if (this.locationFilter.trim()) {
+      const locationQuery = this.locationFilter.toLowerCase().trim();
+      filtered = filtered.filter(candidate =>
+        candidate.location.toLowerCase().includes(locationQuery)
+      );
+    }
+
+    this.filteredCandidates = filtered;
+  }
+
+  /**
+   * Clear all filters
+   */
+  clearFilters(): void {
+    this.searchQuery = '';
+    this.statusFilter = '';
+    this.experienceFilter = '';
+    this.locationFilter = '';
+    this.filteredCandidates = [...this.candidates];
   }
   
   /**
@@ -264,45 +325,22 @@ export class RecruiterCandidatesComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Contact candidate
+   * Contact candidate - Open Outlook compose
    */
   contactCandidate(candidateId: number): void {
     const candidate = this.candidates.find(c => c.id === candidateId);
     if (candidate) {
-      alert(`Contact form for ${candidate.name} would open here. Email: ${candidate.email}`);
+      // Open Outlook web app in compose mode
+      const outlookUrl = `https://outlook.live.com/mail/0/deeplink/compose?to=${encodeURIComponent(candidate.email)}`;
+      window.open(outlookUrl, '_blank');
+      this.alertService.success('Outlook Opened', `Opening Outlook to compose email to: ${candidate.email}`);
     } else {
       console.error('Candidate not found for ID:', candidateId);
+      this.alertService.error('Error', 'Candidate not found');
     }
   }
   
-  /**
-   * Open search history modal
-   */
-  openSearchHistory(): void {
-    this.showSearchHistoryModal = true;
-    document.body.style.overflow = 'hidden';
-  }
-  
-  /**
-   * Close search history modal
-   */
-  closeSearchHistory(): void {
-    this.showSearchHistoryModal = false;
-    document.body.style.overflow = 'auto';
-  }
-  
-  /**
-   * Load search from history
-   */
-  loadSearchHistory(search: SearchHistory): void {
-    console.log('Loading search:', search.title);
-    // Load the search parameters into the current search
-    this.searchQuery = search.title;
-    // In a real implementation, you might also set filters based on skills, experience, location
-    this.closeSearchHistory();
-    // Optionally trigger search
-    this.onSearch();
-  }
+
   
   /**
    * Get human-readable status text
@@ -315,4 +353,6 @@ export class RecruiterCandidatesComponent implements OnInit, OnDestroy {
     };
     return statusMap[status] || status;
   }
+
+
 }

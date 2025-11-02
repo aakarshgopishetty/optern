@@ -83,6 +83,7 @@ public class RecruitersController : ControllerBase
             jobTitle = recruiter.JobTitle,
             phoneNumber = recruiter.PhoneNumber,
             bio = recruiter.Bio,
+            createdDate = recruiter.CreatedDate,
             companyID = recruiter.CompanyID,
             company = recruiter.Company != null ? new {
                 companyID = recruiter.Company.CompanyID,
@@ -91,6 +92,8 @@ public class RecruitersController : ControllerBase
                 size = recruiter.Company.Size,
                 address = recruiter.Company.Address,
                 phone = recruiter.Company.Phone,
+                founded = recruiter.Company.Founded,
+                description = recruiter.Company.Description,
                 industryID = recruiter.Company.IndustryID,
                 industry = recruiter.Company.Industry != null ? new {
                     industryID = recruiter.Company.Industry.IndustryID,
@@ -102,8 +105,10 @@ public class RecruitersController : ControllerBase
 
     [HttpPut("profile")]
     [Authorize]
-    public async Task<IActionResult> UpdateProfile([FromBody] object profileData)
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateRecruiterProfileDto profileData)
     {
+        Console.WriteLine($"UpdateProfile called with data: FullName={profileData.FullName}, JobTitle={profileData.JobTitle}, PhoneNumber={profileData.PhoneNumber}, Bio={profileData.Bio}");
+
         var emailClaim = User.FindFirst("Email");
         if (emailClaim == null)
         {
@@ -116,29 +121,34 @@ public class RecruitersController : ControllerBase
             return NotFound(new { message = "Recruiter profile not found" });
         }
 
+        Console.WriteLine($"Found recruiter: ID={recruiter.RecruiterID}, Current FullName={recruiter.FullName}, JobTitle={recruiter.JobTitle}");
+
         // Update recruiter fields based on the provided data
-        var jsonElement = (System.Text.Json.JsonElement)profileData;
-        
-        if (jsonElement.TryGetProperty("fullName", out var fullNameElement))
+        if (!string.IsNullOrEmpty(profileData.FullName))
         {
-            recruiter.FullName = fullNameElement.GetString() ?? recruiter.FullName;
+            Console.WriteLine($"Updating FullName from '{recruiter.FullName}' to '{profileData.FullName}'");
+            recruiter.FullName = profileData.FullName;
         }
-        if (jsonElement.TryGetProperty("jobTitle", out var jobTitleElement))
+        if (!string.IsNullOrEmpty(profileData.JobTitle))
         {
-            recruiter.JobTitle = jobTitleElement.GetString() ?? recruiter.JobTitle;
+            Console.WriteLine($"Updating JobTitle from '{recruiter.JobTitle}' to '{profileData.JobTitle}'");
+            recruiter.JobTitle = profileData.JobTitle;
         }
-        if (jsonElement.TryGetProperty("phoneNumber", out var phoneElement))
+        if (!string.IsNullOrEmpty(profileData.PhoneNumber))
         {
-            recruiter.PhoneNumber = phoneElement.GetString() ?? recruiter.PhoneNumber;
+            Console.WriteLine($"Updating PhoneNumber from '{recruiter.PhoneNumber}' to '{profileData.PhoneNumber}'");
+            recruiter.PhoneNumber = profileData.PhoneNumber;
         }
-        if (jsonElement.TryGetProperty("bio", out var bioElement))
+        if (profileData.Bio != null)
         {
-            recruiter.Bio = bioElement.GetString() ?? recruiter.Bio;
+            Console.WriteLine($"Updating Bio from '{recruiter.Bio}' to '{profileData.Bio}'");
+            recruiter.Bio = profileData.Bio;
         }
 
         recruiter.UpdatedDate = DateTime.Now;
         await _context.SaveChangesAsync();
 
+        Console.WriteLine("Profile updated successfully");
         return Ok(new { message = "Profile updated successfully" });
     }
 

@@ -1,8 +1,9 @@
-import { Component, inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms'; // import FormsModule
 import { ApplicationService } from '../../services/application.service';
 import { SignalRService } from '../../services/signalr.service';
+import { AlertService } from '../../services/alert.service';
 import { Subscription } from 'rxjs';
 
 interface Application {
@@ -41,8 +42,14 @@ export class ApplicationsManagementComponent implements OnInit, OnDestroy {
 
   applications: any[] = [];
 
+  // Alert system
+  alerts: any[] = [];
+  alertIdCounter = 0;
+
   private applicationService = inject(ApplicationService);
   private signalRService = inject(SignalRService);
+  private alertService = inject(AlertService);
+  private cdr = inject(ChangeDetectorRef);
   private subscription: Subscription = new Subscription();
 
   constructor() {
@@ -77,35 +84,42 @@ export class ApplicationsManagementComponent implements OnInit, OnDestroy {
   }
 
   private loadApplications() {
+    console.log('Loading applications for recruiter...');
     this.applicationService.getByRecruiter().subscribe({
       next: (data) => {
+        console.log('Received applications data:', data);
         // Map API data to expected format
-        this.applications = (data || []).map(app => ({
-          id: app.ApplicationID,
-          name: app.Candidate?.FullName || 'Unknown Candidate',
-          role: app.Job?.Title || 'Unknown Position',
-          company: app.Job?.Company?.Name || 'Unknown Company',
-          initials: (app.Candidate?.FullName || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase(),
-          color: this.getRandomColor(),
-          email: app.Candidate?.Email || '',
-          location: app.Candidate?.Address || '',
-          experience: 'Not specified', // Could be added to candidate profile later
-          applied: new Date(app.AppliedDate).toLocaleDateString(),
-          skills: [], // Could be added to candidate profile later
-          status: app.Status,
-          rating: 4, // Default rating, could be added to application model
-          education: 'Not specified', // Could be added to candidate profile later
-          coverLetter: app.CoverLetter || '',
-          phone: app.Candidate?.PhoneNumber || '',
-          applicationID: app.ApplicationID,
-          jobID: app.JobID,
-          candidateID: app.CandidateID,
-          interviewStatus: app.InterviewStatus,
-          resumeUrl: app.ResumeUrl
-        }));
+        this.applications = (data || []).map(app => {
+          const mappedApp = {
+            id: app.ApplicationID,
+            name: app.Candidate?.FullName || 'Unknown Candidate',
+            role: app.Job?.Title || 'Unknown Position',
+            company: app.Job?.Company?.Name || 'Unknown Company',
+            initials: (app.Candidate?.FullName || 'U').split(' ').map((n: string) => n[0]).join('').toUpperCase(),
+            color: this.getRandomColor(),
+            email: app.Candidate?.Email || '',
+            location: app.Candidate?.Address || '',
+            experience: 'Not specified', // Could be added to candidate profile later
+            applied: new Date(app.AppliedDate).toLocaleDateString(),
+            skills: [], // Could be added to candidate profile later
+            status: app.Status,
+            rating: 4, // Default rating, could be added to application model
+            education: 'Not specified', // Could be added to candidate profile later
+            coverLetter: app.CoverLetter || '',
+            phone: app.Candidate?.PhoneNumber || '',
+            applicationID: app.ApplicationID,
+            jobID: app.JobID,
+            candidateID: app.CandidateID,
+            interviewStatus: app.InterviewStatus,
+            resumeUrl: app.ResumeUrl
+          };
+          console.log('Mapped application:', mappedApp.name, '-> Role:', mappedApp.role, 'Company:', mappedApp.company);
+          return mappedApp;
+        });
+        console.log('Total applications loaded:', this.applications.length);
       },
       error: (err) => {
-        console.warn('Failed to load applications', err);
+        console.error('Failed to load applications', err);
         this.applications = [];
       }
     });
@@ -161,9 +175,12 @@ export class ApplicationsManagementComponent implements OnInit, OnDestroy {
         this.applicationService.update(id, { status: 'Shortlisted' }).subscribe({
           next: () => {
             (app as any).status = 'Shortlisted';
-            alert('Candidate shortlisted successfully!');
+            this.alertService.success('Success', 'Candidate shortlisted successfully!');
           },
-          error: (err) => alert('Failed to shortlist: ' + (err?.error?.message ?? err))
+          error: (err) => {
+            const errorMessage = err?.error?.message || err?.message || 'Unknown error occurred';
+            this.alertService.error('Error', 'Failed to shortlist: ' + errorMessage);
+          }
         });
       } else {
         (app as any).status = 'Shortlisted';
@@ -178,32 +195,155 @@ export class ApplicationsManagementComponent implements OnInit, OnDestroy {
         this.applicationService.update(id, { status: newStatus }).subscribe({
           next: () => {
             (app as any).status = newStatus;
-            alert(`Application status updated to ${newStatus}!`);
+            this.alertService.success('Success', `Application status updated to ${newStatus}!`);
           },
-          error: (err) => alert('Failed to update status: ' + (err?.error?.message ?? err))
+          error: (err) => {
+            const errorMessage = err?.error?.message || err?.message || 'Unknown error occurred';
+            this.alertService.error('Error', 'Failed to update status: ' + errorMessage);
+          }
         });
       }
     }
   }
 
   scheduleInterview(app: Application): void {
-    const interviewDate = prompt('Enter interview date and time (YYYY-MM-DD HH:MM):');
-    if (interviewDate) {
+    // Create a proper modal for scheduling interview
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      backdrop-filter: blur(4px);
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+    `;
+
+    modalContent.innerHTML = `
+      <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 18px; font-weight: 600;">Schedule Interview</h3>
+      <p style="margin: 0 0 20px 0; color: #64748b; font-size: 14px;">Select date and time for the interview with ${app.name}</p>
+
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500; text-align: left;">Interview Date & Time</label>
+        <input type="datetime-local" id="interview-datetime" style="
+          width: 100%;
+          padding: 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          font-size: 14px;
+          box-sizing: border-box;
+        " min="${new Date().toISOString().slice(0, 16)}">
+      </div>
+
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button id="cancel-btn" style="
+          padding: 10px 20px;
+          border: 1px solid #d1d5db;
+          background: white;
+          color: #6b7280;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+        ">Cancel</button>
+        <button id="schedule-btn" style="
+          padding: 10px 20px;
+          border: none;
+          background: #3b82f6;
+          color: white;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+        ">Schedule Interview</button>
+      </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Focus on datetime input
+    setTimeout(() => {
+      const datetimeInput = document.getElementById('interview-datetime') as HTMLInputElement;
+      if (datetimeInput) datetimeInput.focus();
+    }, 100);
+
+    // Handle cancel
+    document.getElementById('cancel-btn')?.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    // Handle schedule
+    document.getElementById('schedule-btn')?.addEventListener('click', () => {
+      const datetimeInput = document.getElementById('interview-datetime') as HTMLInputElement;
+      const selectedDateTime = datetimeInput?.value;
+
+      if (!selectedDateTime) {
+        this.alertService.warning('Warning', 'Please select a date and time for the interview.');
+        return;
+      }
+
+      const interviewDate = new Date(selectedDateTime);
+      const now = new Date();
+
+      if (interviewDate <= now) {
+        this.alertService.warning('Warning', 'Please select a future date and time for the interview.');
+        return;
+      }
+
+      // Close modal
+      document.body.removeChild(modal);
+
+      // Format the date nicely
+      const formattedDate = interviewDate.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
       if ((app as any).applicationID) {
         const id = (app as any).applicationID;
         this.applicationService.update(id, {
           status: 'Interview Scheduled',
-          interviewStatus: `Interview scheduled for ${interviewDate}`
+          interviewStatus: `Interview scheduled for ${formattedDate}`
         }).subscribe({
           next: () => {
             (app as any).status = 'Interview Scheduled';
-            (app as any).interviewStatus = `Interview scheduled for ${interviewDate}`;
-            alert('Interview scheduled successfully!');
+            (app as any).interviewStatus = `Interview scheduled for ${formattedDate}`;
+            this.alertService.success('Success', `Interview scheduled for ${formattedDate}!`);
           },
-          error: (err) => alert('Failed to schedule interview: ' + (err?.error?.message ?? err))
+          error: (err) => {
+            const errorMessage = err?.error?.message || err?.message || 'Unknown error occurred';
+            this.alertService.error('Error', 'Failed to schedule interview: ' + errorMessage);
+          }
         });
       }
-    }
+    });
+
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
   }
 
   scheduleInterviewFromModal(app: Application | undefined): void {
@@ -217,9 +357,35 @@ export class ApplicationsManagementComponent implements OnInit, OnDestroy {
       // Check if resume URL exists
       if ((app as any).resumeUrl) {
         window.open((app as any).resumeUrl, '_blank');
+        this.alertService.success('Success', 'Resume download initiated');
       } else {
-        alert('Resume not available for this candidate');
+        this.alertService.warning('Warning', 'Resume not available for this candidate');
       }
+    }
+  }
+
+  contactCandidate(type: string, contact: string | undefined): void {
+    if (!contact) {
+      this.alertService.warning('Warning', 'Contact information not available');
+      return;
+    }
+
+    if (type === 'email') {
+      // Copy email to clipboard
+      navigator.clipboard.writeText(contact).then(() => {
+        this.alertService.success('Email Copied', `Email copied: ${contact}`);
+      }).catch(() => {
+        // Fallback - show DOM alert with contact info
+        this.alertService.info('Email Address', contact);
+      });
+    } else if (type === 'phone') {
+      // Copy phone to clipboard
+      navigator.clipboard.writeText(contact).then(() => {
+        this.alertService.success('Phone Copied', `Phone copied: ${contact}`);
+      }).catch(() => {
+        // Fallback - show DOM alert with contact info
+        this.alertService.info('Phone Number', contact);
+      });
     }
   }
 
@@ -242,4 +408,6 @@ export class ApplicationsManagementComponent implements OnInit, OnDestroy {
 
     return stars;
   }
+
+
 }

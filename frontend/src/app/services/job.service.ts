@@ -320,9 +320,13 @@ export class JobService {
   delete(id: number) {
     return this.http.delete(`${this.baseUrl}/${id}`).pipe(
       tap(() => {
-        // Refresh both job lists after deletion
+        // Refresh all jobs
         this.refreshAllJobs();
-        // Removed refreshRecruiterJobs() to prevent clearing jobs list
+
+        // Immediately remove the deleted job from recruiter jobs to prevent flicker
+        const currentRecruiterJobs = this.recruiterJobsSubject.value || [];
+        const updatedJobs = currentRecruiterJobs.filter(job => job.jobID !== id);
+        this.recruiterJobsSubject.next(updatedJobs);
       })
     );
   }

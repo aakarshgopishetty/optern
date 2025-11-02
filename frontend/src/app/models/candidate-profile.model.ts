@@ -5,7 +5,7 @@ export interface CandidateProfile {
   phoneNumber: string;
   linkedInProfile: string;
   address: string;
-  dateOfBirth: Date;
+  dateOfBirth: Date | null;
   gender: string;
   status: string;
   resumeURL: string;
@@ -29,7 +29,7 @@ export interface CandidateProfileDto {
   PhoneNumber: string;
   LinkedInProfile: string;
   Address: string;
-  DateOfBirth: string; // ISO string format
+  DateOfBirth: string | null; // ISO string format or null
   Gender: string;
   Status: string;
   ResumeURL: string;

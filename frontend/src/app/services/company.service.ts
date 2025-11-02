@@ -7,6 +7,8 @@ export interface Company {
   name: string;
   website?: string;
   address?: string;
+  founded?: string;
+  size?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -20,5 +22,9 @@ export class CompanyService {
 
   get(id: number) {
     return this.http.get<Company>(`${this.baseUrl}/${id}`);
+  }
+
+  update(id: number, company: any): Observable<any> {
+    return this.http.put<any>(`${this.baseUrl}/${id}`, company);
   }
 }

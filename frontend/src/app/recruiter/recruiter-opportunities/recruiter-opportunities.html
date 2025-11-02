@@ -143,15 +143,24 @@
     </div>
   </div>
 
-  <!-- Error Message -->
-  <div class="error-message" *ngIf="!isLoading && errorMessage">
-    <div class="error-content">
-      <i class="bi bi-exclamation-triangle"></i>
-      <h3>Failed to Load Job Opportunities</h3>
-      <p>{{ errorMessage }}</p>
-      <button class="retry-btn" (click)="loadJobsFromDatabase()">
-        <i class="bi bi-arrow-clockwise"></i> Retry Loading
-      </button>
+  <!-- Error Message Modal -->
+  <div class="modal-overlay" *ngIf="!isLoading && errorMessage" (click)="errorMessage = null">
+    <div class="error-modal-container" (click)="$event.stopPropagation()">
+      <button class="modal-close" (click)="errorMessage = null"><i class="bi bi-x"></i></button>
+      <div class="error-modal-content">
+        <div class="error-modal-icon">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+        </div>
+        <h2 class="error-modal-title">Unable to Load Job Opportunities</h2>
+        <p class="error-modal-message">{{ errorMessage }}</p>
+        <div class="error-modal-actions">
+          <button class="btn-cancel" (click)="errorMessage = null">Close</button>
+          <button class="error-retry-btn" (click)="loadJobsFromDatabase()">
+            <i class="bi bi-arrow-clockwise"></i>
+            <span>Try Again</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -210,18 +219,26 @@
             <input type="text"
                    placeholder="Senior Frontend Developer"
                    class="form-input"
+                   [class.error]="jobForm.submitted && jobForm.controls['title'].invalid"
                    [(ngModel)]="newJob.title"
                    name="title"
                    required />
+            <div class="error-message" *ngIf="jobForm.submitted && jobForm.controls['title']?.invalid">
+              Job title is required
+            </div>
           </div>
           <div class="form-group">
             <label>Location *</label>
             <input type="text"
                    placeholder="San Francisco, CA"
                    class="form-input"
+                   [class.error]="jobForm.submitted && jobForm.controls['location'].invalid"
                    [(ngModel)]="newJob.location"
                    name="location"
                    required />
+            <div class="error-message" *ngIf="jobForm.submitted && jobForm.controls['location']?.invalid">
+              Location is required
+            </div>
           </div>
         </div>
         <div class="form-row">
@@ -307,18 +324,26 @@
             <input type="text"
                    placeholder="Senior Frontend Developer"
                    class="form-input"
+                   [class.error]="editJobForm.submitted && editJobForm.controls['editTitle'].invalid"
                    [(ngModel)]="editJob.title"
                    name="editTitle"
                    required />
+            <div class="error-message" *ngIf="editJobForm.submitted && editJobForm.controls['editTitle']?.invalid">
+              Job title is required
+            </div>
           </div>
           <div class="form-group">
             <label>Location *</label>
             <input type="text"
                    placeholder="San Francisco, CA"
                    class="form-input"
+                   [class.error]="editJobForm.submitted && editJobForm.controls['editLocation'].invalid"
                    [(ngModel)]="editJob.location"
                    name="editLocation"
                    required />
+            <div class="error-message" *ngIf="editJobForm.submitted && editJobForm.controls['editLocation']?.invalid">
+              Location is required
+            </div>
           </div>
         </div>
         <div class="form-row">

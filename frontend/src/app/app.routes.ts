@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { CandidateShellComponent } from './candidate/candidate-shell/candidate-shell';
 import { RecruiterShellComponent } from './recruiter/recruiter-shell/recruiter-shell';
+import { AdminShellComponent } from './admin/admin-shell/admin-shell';
 import { roleGuard } from './guards/role.guard';
 
 export const routes: Routes = [
@@ -104,6 +105,41 @@ export const routes: Routes = [
             loadComponent: () => import('./recruiter/recruiter-profile/recruiter-profile').then(m => m.RecruiterProfileComponent) 
           }
           
+        ]
+      }
+    ]
+  },
+
+  // Admin Routes
+  {
+    path: 'admin',
+    children: [
+      {
+        path: 'sign-in',
+        loadComponent: () => import('./admin/admin-sign-in/admin-sign-in').then(m => m.AdminSignInComponent)
+      },
+      {
+        path: '',
+        component: AdminShellComponent,
+        canActivate: [() => roleGuard('admin')()],
+        children: [
+          { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+          {
+            path: 'dashboard',
+            loadComponent: () => import('./admin/admin-dashboard/admin-dashboard').then(m => m.AdminDashboardComponent)
+          },
+          {
+            path: 'users',
+            loadComponent: () => import('./admin/admin-users/admin-users').then(m => m.AdminUsersComponent)
+          },
+          {
+            path: 'grievances',
+            loadComponent: () => import('./admin/admin-grievances/admin-grievances').then(m => m.AdminGrievancesComponent)
+          },
+          {
+            path: 'activity-logs',
+            loadComponent: () => import('./admin/admin-activity-logs/admin-activity-logs').then(m => m.AdminActivityLogsComponent)
+          }
         ]
       }
     ]

@@ -455,12 +455,18 @@ public class ApplicationsController : ControllerBase
 
     [HttpPut("{id}")]
     [Authorize]
-    public async Task<IActionResult> Update(int id, Application app)
+    public async Task<IActionResult> Update(int id, [FromBody] System.Text.Json.JsonElement updateData)
     {
-        if (id != app.ApplicationID) return BadRequest();
+        Console.WriteLine($"ApplicationsController - Update called for ID: {id}");
 
         var existingApp = await _context.Applications.Include(a => a.Job).FirstOrDefaultAsync(a => a.ApplicationID == id);
-        if (existingApp == null) return NotFound();
+        if (existingApp == null)
+        {
+            Console.WriteLine($"Application with ID {id} not found");
+            return NotFound();
+        }
+
+        Console.WriteLine($"Found application: ID={existingApp.ApplicationID}, JobID={existingApp.JobID}, Status={existingApp.Status}");
 
         // Allow recruiters to update status for their jobs
         var emailClaim = User.FindFirst("Email");
@@ -474,24 +480,68 @@ public class ApplicationsController : ControllerBase
             {
                 // For test token, assume recruiter role for now
                 userEmail = "recruiter@test.com";
+                Console.WriteLine("Using test token, setting userEmail to recruiter@test.com");
             }
             else
             {
+                Console.WriteLine("No email claim and no test token found");
                 return Unauthorized(new { message = "Invalid authentication token" });
             }
         }
         else
         {
             userEmail = emailClaim.Value;
+            Console.WriteLine($"Using email from claim: {userEmail}");
         }
 
         var recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Email == userEmail);
+        Console.WriteLine($"Recruiter lookup result: {recruiter != null}, RecruiterID: {recruiter?.RecruiterID}");
+
         if (recruiter != null && existingApp.Job != null && existingApp.Job.RecruiterID == recruiter.RecruiterID)
         {
+            Console.WriteLine($"Authorization successful: Recruiter {recruiter.RecruiterID} owns job {existingApp.Job.JobID}");
+
             // Recruiter updating their job's application
             var oldStatus = existingApp.Status;
-            _context.Entry(app).State = EntityState.Modified;
+
+            // Handle partial updates using JsonElement
+            string newStatus = null;
+            if (updateData.TryGetProperty("status", out var statusElement) && statusElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                newStatus = statusElement.GetString();
+                Console.WriteLine($"Found status (camelCase): {newStatus}");
+            }
+            else if (updateData.TryGetProperty("Status", out var statusElementPascal) && statusElementPascal.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                newStatus = statusElementPascal.GetString();
+                Console.WriteLine($"Found Status (PascalCase): {newStatus}");
+            }
+
+            string newInterviewStatus = null;
+            if (updateData.TryGetProperty("interviewStatus", out var interviewElement) && interviewElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                newInterviewStatus = interviewElement.GetString();
+                Console.WriteLine($"Found interviewStatus (camelCase): {newInterviewStatus}");
+            }
+            else if (updateData.TryGetProperty("InterviewStatus", out var interviewElementPascal) && interviewElementPascal.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                newInterviewStatus = interviewElementPascal.GetString();
+                Console.WriteLine($"Found InterviewStatus (PascalCase): {newInterviewStatus}");
+            }
+
+            if (newStatus != null)
+            {
+                existingApp.Status = newStatus;
+                Console.WriteLine($"Updated status from {oldStatus} to {newStatus}");
+            }
+            if (newInterviewStatus != null)
+            {
+                existingApp.InterviewStatus = newInterviewStatus;
+                Console.WriteLine($"Updated interview status to {newInterviewStatus}");
+            }
+
             await _context.SaveChangesAsync();
+            Console.WriteLine("Changes saved to database successfully");
 
             // Log activity
             var activityLog = new ActivityLog
@@ -499,12 +549,13 @@ public class ApplicationsController : ControllerBase
                 UserID = recruiter.UserId,
                 ActivityType = "Status Update",
                 EntityType = "Application",
-                Description = $"Updated application status from {oldStatus} to {app.Status} for job {existingApp.Job?.Title}",
+                Description = $"Updated application status from {oldStatus} to {existingApp.Status} for job {existingApp.Job?.Title}",
                 CreatedDate = DateTime.Now,
                 EntityID = id
             };
             _context.ActivityLogs.Add(activityLog);
             await _context.SaveChangesAsync();
+            Console.WriteLine("Activity log created");
 
             // Broadcast real-time update to dashboard
             await _hubContext.Clients.Group("recruiter").SendAsync("ReceiveDashboardUpdate", "stats-update", new
@@ -512,7 +563,7 @@ public class ApplicationsController : ControllerBase
                 type = "application-status-updated",
                 applicationId = id,
                 oldStatus = oldStatus,
-                newStatus = app.Status,
+                newStatus = existingApp.Status,
                 jobId = existingApp.JobID,
                 recruiterId = recruiter.RecruiterID
             });
@@ -521,12 +572,16 @@ public class ApplicationsController : ControllerBase
             {
                 type = "application-status-updated",
                 applicationId = id,
-                newStatus = app.Status,
+                newStatus = existingApp.Status,
                 candidateId = existingApp.CandidateID
             });
 
+            Console.WriteLine("Real-time updates sent, returning NoContent");
             return NoContent();
         }
+
+        Console.WriteLine("Authorization failed - recruiter not found or doesn't own the job");
+        Console.WriteLine($"Recruiter: {recruiter != null}, Job: {existingApp.Job != null}, RecruiterID match: {existingApp.Job?.RecruiterID == recruiter?.RecruiterID}");
 
         // Candidates can only update their own applications (limited fields)
         var userIdClaim = User.FindFirst("UserId")?.Value;
@@ -537,9 +592,11 @@ public class ApplicationsController : ControllerBase
             if (authHeader == "Bearer test-token")
             {
                 userId = 2; // Use candidate user ID
+                Console.WriteLine("Using test token for candidate, userId = 2");
             }
             else
             {
+                Console.WriteLine("No valid user ID claim found");
                 return Unauthorized(new { message = "Invalid authentication token" });
             }
         }
@@ -547,9 +604,17 @@ public class ApplicationsController : ControllerBase
         var candidate = await _context.CandidateProfiles.FirstOrDefaultAsync(c => c.UserId == userId);
         if (candidate != null && existingApp.CandidateID == candidate.CandidateID)
         {
+            Console.WriteLine("Candidate authorization successful, updating limited fields");
+
             // Allow candidates to update cover letter and resume URL
-            existingApp.CoverLetter = app.CoverLetter;
-            existingApp.ResumeUrl = app.ResumeUrl;
+            if (updateData.TryGetProperty("CoverLetter", out var coverLetterElement) && coverLetterElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                existingApp.CoverLetter = coverLetterElement.GetString();
+            }
+            if (updateData.TryGetProperty("ResumeUrl", out var resumeUrlElement) && resumeUrlElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                existingApp.ResumeUrl = resumeUrlElement.GetString();
+            }
             await _context.SaveChangesAsync();
 
             // Log activity
@@ -568,6 +633,7 @@ public class ApplicationsController : ControllerBase
             return NoContent();
         }
 
+        Console.WriteLine("Authorization failed - neither recruiter nor candidate permissions");
         return Forbid();
     }
 

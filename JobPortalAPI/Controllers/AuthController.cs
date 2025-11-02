@@ -38,33 +38,9 @@ namespace JobPortalAPI.Controllers
                 Console.WriteLine($"Request path: {HttpContext.Request.Path}");
                 Console.WriteLine($"Request method: {HttpContext.Request.Method}");
 
-                // Check for test token authentication
-                var authHeader = HttpContext.Request.Headers["Authorization"].FirstOrDefault();
-                if (authHeader == "Bearer test-token")
-                {
-                    Console.WriteLine("Test token login attempt");
-                    // For test token, return a mock successful login for candidate@test.com
-                    var testUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == "candidate@test.com");
-                    if (testUser == null)
-                    {
-                        return Unauthorized(new { message = "Test user not found" });
-                    }
-
-                    var testToken = GenerateJwtToken(testUser);
-                    testUser.Password = string.Empty;
-
-                    return Ok(new
-                    {
-                        message = "Login successful (test token)",
-                        user = testUser,
-                        success = true,
-                        userId = testUser.UserId,
-                        email = testUser.Email,
-                        role = testUser.Role,
-                        token = testToken,
-                        recruiterProfile = (object)null
-                    });
-                }
+                // Get client IP and user agent for logging
+                var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
 
                 if (req == null || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                 {
@@ -72,27 +48,51 @@ namespace JobPortalAPI.Controllers
                     return BadRequest(new { message = "Email and password are required" });
                 }
 
+                // Validate email format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(req.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                {
+                    return BadRequest(new { message = "Invalid email format" });
+                }
+
                 Console.WriteLine($"Searching for user with email: {req.Email}");
                 // Get all users with this email and prioritize by role
                 var users = await _context.Users.Where(u => u.Email == req.Email).ToListAsync();
                 Console.WriteLine($"Found {users.Count} users with email {req.Email}");
 
-                // Prioritize recruiter users over student users over candidate users
+                // Prioritize admin users over recruiter users over candidate users (student and Candidate are treated as equivalent)
+                var adminUsers = users.Where(u => u.Role != null && u.Role.Contains("Admin", StringComparison.OrdinalIgnoreCase)).ToList();
                 var recruiterUsers = users.Where(u => u.Role != null && u.Role.Contains("Recruiter", StringComparison.OrdinalIgnoreCase)).ToList();
-                var studentUsers = users.Where(u => u.Role != null && u.Role.Contains("student", StringComparison.OrdinalIgnoreCase)).ToList();
-                var candidateUsers = users.Where(u => u.Role != null && u.Role.Contains("Candidate", StringComparison.OrdinalIgnoreCase)).ToList();
+                // Combine student and Candidate users since they both map to 'candidate' in the frontend
+                var candidateUsers = users.Where(u => u.Role != null &&
+                    (u.Role.Contains("student", StringComparison.OrdinalIgnoreCase) ||
+                     u.Role.Contains("Candidate", StringComparison.OrdinalIgnoreCase))).ToList();
 
                 // Debug logging
                 Console.WriteLine($"Role filtering debug:");
                 foreach (var u in users)
                 {
-                    Console.WriteLine($"  User {u.Email}: Role='{u.Role}', IsRecruiter={u.Role != null && u.Role.Contains("Recruiter", StringComparison.OrdinalIgnoreCase)}, IsStudent={u.Role != null && u.Role.Contains("student", StringComparison.OrdinalIgnoreCase)}, IsCandidate={u.Role != null && u.Role.Contains("Candidate", StringComparison.OrdinalIgnoreCase)}");
+                    Console.WriteLine($"  User {u.Email}: Role='{u.Role}', IsAdmin={u.Role != null && u.Role.Contains("Admin", StringComparison.OrdinalIgnoreCase)}, IsRecruiter={u.Role != null && u.Role.Contains("Recruiter", StringComparison.OrdinalIgnoreCase)}, IsCandidate={u.Role != null && (u.Role.Contains("student", StringComparison.OrdinalIgnoreCase) || u.Role.Contains("Candidate", StringComparison.OrdinalIgnoreCase))}");
                 }
 
-                Console.WriteLine($"Recruiter users: {recruiterUsers.Count}, Student users: {studentUsers.Count}, Candidate users: {candidateUsers.Count}");
+                Console.WriteLine($"Admin users: {adminUsers.Count}, Recruiter users: {recruiterUsers.Count}, Candidate users (including students): {candidateUsers.Count}");
 
                 User? user = null;
-                if (recruiterUsers.Any())
+                if (adminUsers.Any())
+                {
+                    // Prioritize admin users with non-empty passwords
+                    var validAdminUsers = adminUsers.Where(u => !string.IsNullOrEmpty(u.Password)).ToList();
+                    if (validAdminUsers.Any())
+                    {
+                        user = validAdminUsers.First();
+                        Console.WriteLine($"Selected admin user with valid password: ID={user.UserId}, Role={user.Role}");
+                    }
+                    else
+                    {
+                        user = adminUsers.First();
+                        Console.WriteLine($"Selected admin user (no valid password found): ID={user.UserId}, Role={user.Role}");
+                    }
+                }
+                else if (recruiterUsers.Any())
                 {
                     // Prioritize recruiter users with non-empty passwords
                     var validRecruiterUsers = recruiterUsers.Where(u => !string.IsNullOrEmpty(u.Password)).ToList();
@@ -107,25 +107,13 @@ namespace JobPortalAPI.Controllers
                         Console.WriteLine($"Selected recruiter user (no valid password found): ID={user.UserId}, Role={user.Role}");
                     }
                 }
-                else if (studentUsers.Any())
-                {
-                    // Prioritize student users with non-empty passwords
-                    var validStudentUsers = studentUsers.Where(u => !string.IsNullOrEmpty(u.Password)).ToList();
-                    if (validStudentUsers.Any())
-                    {
-                        user = validStudentUsers.First();
-                        Console.WriteLine($"Selected student user with valid password: ID={user.UserId}, Role={user.Role}");
-                    }
-                    else
-                    {
-                        user = studentUsers.First();
-                        Console.WriteLine($"Selected student user (no valid password found): ID={user.UserId}, Role={user.Role}");
-                    }
-                }
                 else if (candidateUsers.Any())
                 {
-                    // Prioritize candidate users with non-empty passwords
-                    var validCandidateUsers = candidateUsers.Where(u => !string.IsNullOrEmpty(u.Password)).ToList();
+                    // Prioritize candidate users (including students) with non-empty passwords
+                    // If multiple candidates exist, prefer the most recently updated one
+                    var validCandidateUsers = candidateUsers.Where(u => !string.IsNullOrEmpty(u.Password))
+                        .OrderByDescending(u => u.UpdatedAt)
+                        .ToList();
                     if (validCandidateUsers.Any())
                     {
                         user = validCandidateUsers.First();
@@ -133,7 +121,7 @@ namespace JobPortalAPI.Controllers
                     }
                     else
                     {
-                        user = candidateUsers.First();
+                        user = candidateUsers.OrderByDescending(u => u.UpdatedAt).First();
                         Console.WriteLine($"Selected candidate user (no valid password found): ID={user.UserId}, Role={user.Role}");
                     }
                 }
@@ -141,78 +129,58 @@ namespace JobPortalAPI.Controllers
                 if (user == null)
                 {
                     Console.WriteLine($"Login failed: No user found with email {req.Email}");
-                    Console.WriteLine($"Available users in database:");
-                    var allUsers = await _context.Users.ToListAsync();
-                    foreach (var u in allUsers)
-                    {
-                        Console.WriteLine($"  - {u.Email} (ID: {u.UserId}, Role: {u.Role})");
-                    }
+                    // Log failed attempt for non-existent user
+                    await LogLoginAttemptAsync(null, req.Email, false, clientIp, userAgent);
                     return Unauthorized(new { message = "Invalid email or password" });
+                }
+
+                // Check if account is locked
+                if (user.IsLocked)
+                {
+                    Console.WriteLine($"Login failed: Account locked for user {user.Email}");
+                    await LogLoginAttemptAsync(user.UserId, req.Email, false, clientIp, userAgent);
+                    var remainingTime = user.LockoutEnd!.Value - DateTime.Now;
+                    return Unauthorized(new {
+                        message = $"Account is locked due to too many failed login attempts. Try again in {Math.Ceiling(remainingTime.TotalMinutes)} minutes."
+                    });
                 }
 
                 Console.WriteLine($"User found: {user.Email}, Role: {user.Role}, Password length: {user.Password?.Length ?? 0}");
                 Console.WriteLine($"Password starts with: '{user.Password?.Substring(0, Math.Min(5, user.Password?.Length ?? 0))}'");
 
-                // Standardized password verification
+                // SECURE: Only allow BCrypt hashed passwords
                 bool isPasswordValid = false;
-                string passwordVerificationMethod = "";
 
-                // Method 1: Try BCrypt verification (for properly hashed passwords)
-                if (!string.IsNullOrEmpty(user.Password) && user.Password.StartsWith("$2"))
+                if (string.IsNullOrEmpty(user.Password))
+                {
+                    Console.WriteLine($"Login failed: No password set for user {user.Email}");
+                    await LogLoginAttemptAsync(user.UserId, req.Email, false, clientIp, userAgent);
+                    return Unauthorized(new { message = "Invalid email or password" });
+                }
+
+                // Only verify BCrypt hashed passwords
+                if (user.Password.StartsWith("$2"))
                 {
                     try
                     {
                         isPasswordValid = BCrypt.Net.BCrypt.Verify(req.Password, user.Password);
-                        passwordVerificationMethod = "BCrypt";
                         Console.WriteLine($"BCrypt verification result: {isPasswordValid}");
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"BCrypt verification error: {ex.Message}");
+                        isPasswordValid = false;
                     }
                 }
-
-                // Method 2: Try plain text comparison (for legacy users) - but hash immediately after
-                if (!isPasswordValid && !string.IsNullOrEmpty(user.Password) && !user.Password.StartsWith("$2"))
+                else
                 {
-                    isPasswordValid = req.Password == user.Password;
-                    passwordVerificationMethod = "PlainText";
-                    Console.WriteLine($"Plain text password comparison result: {isPasswordValid}");
-                }
-
-                // Method 3: If still not valid, try BCrypt on plain text password (for test users)
-                if (!isPasswordValid && !string.IsNullOrEmpty(req.Password))
-                {
-                    try
-                    {
-                        // Hash the provided password and compare with stored hash
-                        isPasswordValid = BCrypt.Net.BCrypt.Verify(req.Password, user.Password);
-                        passwordVerificationMethod = "BCryptFallback";
-                        Console.WriteLine($"BCrypt fallback verification result: {isPasswordValid}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"BCrypt fallback verification error: {ex.Message}");
-                    }
-                }
-
-                Console.WriteLine($"Password verification method used: {passwordVerificationMethod}");
-
-                // If password is valid and not already hashed, hash it for future use
-                if (isPasswordValid && !user.Password.StartsWith("$2"))
-                {
-                    try
-                    {
-                        user.Password = BCrypt.Net.BCrypt.HashPassword(req.Password);
-                        user.UpdatedAt = DateTime.Now;
-                        await _context.SaveChangesAsync();
-                        Console.WriteLine($"Password hashed and updated for user: {user.Email}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error hashing password: {ex.Message}");
-                        // Continue with login even if hashing fails
-                    }
+                    // CRITICAL: Plain text passwords are not allowed
+                    Console.WriteLine($"SECURITY ALERT: User {user.Email} has unhashed password - forcing password reset");
+                    await LogLoginAttemptAsync(user.UserId, req.Email, false, clientIp, userAgent);
+                    return Unauthorized(new {
+                        message = "Password security update required. Please use forgot password to reset your password.",
+                        requiresPasswordReset = true
+                    });
                 }
 
                 if (!isPasswordValid)
@@ -223,6 +191,9 @@ namespace JobPortalAPI.Controllers
                 }
 
                 Console.WriteLine($"Login successful for user: {user.Email} (ID: {user.UserId})");
+
+                // Handle successful login (reset counters, log attempt)
+                await HandleSuccessfulLoginAsync(user, clientIp, userAgent);
 
                 // Generate JWT token
                 var token = GenerateJwtToken(user);
@@ -237,32 +208,54 @@ namespace JobPortalAPI.Controllers
                     recruiter = await _context.Recruiters.FirstOrDefaultAsync(r => r.Email == user.Email);
                     if (recruiter == null)
                     {
-                        // Get first available company or create one
-                        var company = await _context.Companies.FirstOrDefaultAsync();
-                        if (company == null)
+                        Company? company = null;
+
+                        // First, check if this user already has a company created during registration
+                        // Look for companies that might be associated with this user
+                        // Since we don't have a direct user-company relationship, we'll look for
+                        // companies created around the same time as the user registration
+                        var userCreatedTime = user.CreatedAt;
+                        var companiesCreatedAroundUserTime = await _context.Companies
+                            .Where(c => c.CreatedDate >= userCreatedTime.AddMinutes(-5) &&
+                                       c.CreatedDate <= userCreatedTime.AddMinutes(5))
+                            .OrderByDescending(c => c.CreatedDate)
+                            .ToListAsync();
+
+                        // If we find companies created around the user registration time,
+                        // assume the most recent one is the one created during registration
+                        if (companiesCreatedAroundUserTime.Any())
                         {
-                            // Create a default company
-                            // Get or create default industry
-                            var industry = await _context.Set<IndustryLookup>().FirstOrDefaultAsync();
-                            if (industry == null)
+                            company = companiesCreatedAroundUserTime.First();
+                            Console.WriteLine($"Found existing company '{company.Name}' created during registration for user: {user.Email}");
+                        }
+                        else
+                        {
+                            // No company found from registration, create a default company
+                            company = await _context.Companies.FirstOrDefaultAsync();
+                            if (company == null)
                             {
-                                industry = new IndustryLookup { IndustryName = "Technology" };
-                                _context.Set<IndustryLookup>().Add(industry);
+                                // Get or create default industry
+                                var industry = await _context.Set<IndustryLookup>().FirstOrDefaultAsync();
+                                if (industry == null)
+                                {
+                                    industry = new IndustryLookup { IndustryName = "Technology" };
+                                    _context.Set<IndustryLookup>().Add(industry);
+                                    await _context.SaveChangesAsync();
+                                }
+
+                                company = new Company
+                                {
+                                    Name = "Default Company",
+                                    Website = "https://example.com",
+                                    Size = "1-10",
+                                    Address = "123 Main St",
+                                    Phone = "123-456-7890",
+                                    CreatedDate = DateTime.Now,
+                                    IndustryID = industry.IndustryID
+                                };
+                                _context.Companies.Add(company);
                                 await _context.SaveChangesAsync();
                             }
-
-                            company = new Company
-                            {
-                                Name = "Default Company",
-                                Website = "https://example.com",
-                                Size = "1-10",
-                                Address = "123 Main St",
-                                Phone = "123-456-7890",
-                                CreatedDate = DateTime.Now,
-                                IndustryID = industry.IndustryID
-                            };
-                            _context.Companies.Add(company);
-                            await _context.SaveChangesAsync();
                         }
 
                         // Create recruiter profile
@@ -277,7 +270,7 @@ namespace JobPortalAPI.Controllers
                         };
                         _context.Recruiters.Add(recruiter);
                         await _context.SaveChangesAsync();
-                        Console.WriteLine($"Created recruiter profile for user: {user.Email}");
+                        Console.WriteLine($"Created recruiter profile for user: {user.Email} with company: {company.Name}");
                     }
                 }
 
@@ -315,73 +308,9 @@ namespace JobPortalAPI.Controllers
             return Ok(new { message = "AuthController is working" });
         }
 
-        [HttpGet("debug-users")]
-        public async Task<IActionResult> DebugUsers()
-        {
-            try
-            {
-                var users = await _context.Users.ToListAsync();
-                var userInfo = users.Select(u => new
-                {
-                    userId = u.UserId,
-                    email = u.Email,
-                    role = u.Role,
-                    passwordLength = u.Password?.Length ?? 0,
-                    isHashed = !string.IsNullOrEmpty(u.Password) && u.Password.StartsWith("$2"),
-                    passwordStart = u.Password?.Substring(0, Math.Min(10, u.Password?.Length ?? 0)) ?? "null"
-                }).ToList();
-
-                return Ok(new { 
-                    message = "User debug info", 
-                    userCount = users.Count,
-                    users = userInfo 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Error getting user info", error = ex.Message });
-            }
-        }
-
-        [HttpPost("fix-specific-user")]
-        public async Task<IActionResult> FixSpecificUser([FromBody] FixUserRequest request)
-        {
-            try
-            {
-                if (request == null)
-                {
-                    return BadRequest(new { message = "Request body is required" });
-                }
-
-                string email = request.Email ?? string.Empty;
-                string password = request.Password ?? string.Empty;
-
-                Console.WriteLine($"Fixing user: {email}");
-
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-                if (user == null)
-                {
-                    return NotFound(new { message = "User not found" });
-                }
-
-                // Set the password to the provided value (plain text)
-                user.Password = password;
-                user.UpdatedAt = DateTime.Now;
-                await _context.SaveChangesAsync();
-
-                Console.WriteLine($"User {email} password set to: {password}");
-
-                return Ok(new { 
-                    message = "User password fixed", 
-                    email = email,
-                    passwordSet = true 
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Error fixing user", error = ex.Message });
-            }
-        }
+        // REMOVED: Debug endpoints that expose sensitive information
+        // [HttpGet("debug-users")] - Removed for security
+        // [HttpPost("fix-specific-user")] - Removed for security
 
         [HttpGet("profile")]
         [Microsoft.AspNetCore.Authorization.Authorize]
@@ -436,52 +365,26 @@ namespace JobPortalAPI.Controllers
                     return Unauthorized(new { message = "Invalid authentication token" });
                 }
 
-                // Get client IP address
-                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+                // Get all active sessions for this user
+                var activeSessions = await _context.UserSessions
+                    .Where(s => s.UserId == authenticatedUserId && s.IsActive)
+                    .OrderByDescending(s => s.LastActivity)
+                    .ToListAsync();
 
-                // Get user agent
-                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
-
-                // Parse user agent to get device info
-                var deviceName = ParseDeviceName(userAgent);
-                var location = GetLocationFromIP(ipAddress);
-
-                // For demo purposes, return mock session data
-                // In a real application, you would query a sessions table
-                var sessions = new[]
-                {
-                    new {
-                        sessionId = Guid.NewGuid().ToString(),
-                        deviceName = deviceName,
-                        location = location,
-                        ipAddress = ipAddress,
-                        lastActive = DateTime.Now,
-                        isCurrent = true,
-                        userAgent = userAgent
-                    },
-                    new {
-                        sessionId = Guid.NewGuid().ToString(),
-                        deviceName = "Chrome on Windows",
-                        location = "Mumbai, India",
-                        ipAddress = "192.168.1.101",
-                        lastActive = DateTime.Now.AddHours(-2),
-                        isCurrent = false,
-                        userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    },
-                    new {
-                        sessionId = Guid.NewGuid().ToString(),
-                        deviceName = "Safari on iPhone",
-                        location = "Delhi, India",
-                        ipAddress = "192.168.1.102",
-                        lastActive = DateTime.Now.AddDays(-1),
-                        isCurrent = false,
-                        userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)"
-                    }
-                };
+                var sessions = activeSessions.Select((session, index) => new {
+                    sessionId = session.SessionId.ToString(),
+                    deviceName = session.DeviceName,
+                    location = session.Location,
+                    ipAddress = session.IpAddress,
+                    lastActive = session.LastActivity,
+                    isCurrent = index == 0, // Mark first session as current
+                    userAgent = session.UserAgent.Length > 100 ?
+                        session.UserAgent.Substring(0, 100) + "..." : session.UserAgent
+                }).ToList();
 
                 return Ok(new {
                     sessions = sessions,
-                    totalSessions = sessions.Length,
+                    totalSessions = sessions.Count,
                     currentSessionCount = sessions.Count(s => s.isCurrent)
                 });
             }
@@ -586,6 +489,17 @@ namespace JobPortalAPI.Controllers
             public string Password { get; set; } = string.Empty;
         }
 
+        public class ForgotPasswordRequest
+        {
+            public string Email { get; set; } = string.Empty;
+        }
+
+        public class ResetPasswordRequest
+        {
+            public string Token { get; set; } = string.Empty;
+            public string NewPassword { get; set; } = string.Empty;
+        }
+
         [HttpPost("change-password")]
         [Microsoft.AspNetCore.Authorization.Authorize]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
@@ -683,6 +597,9 @@ namespace JobPortalAPI.Controllers
         {
             try
             {
+                var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? "YourSuperSecretKeyHere12345678901234567890";
+                var accessTokenExpirationMinutes = int.Parse(Environment.GetEnvironmentVariable("JWT_ACCESS_TOKEN_EXPIRATION_MINUTES") ?? "15");
+
                 var claims = new[]
                 {
                     new Claim(JwtRegisteredClaimNames.Sub, user.Email),
@@ -692,14 +609,14 @@ namespace JobPortalAPI.Controllers
                     new Claim("Role", user.Role ?? "user")
                 };
 
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("YourSuperSecretKeyHere12345678901234567890"));
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
                 var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
                 var token = new JwtSecurityToken(
                     issuer: "JobPortalAPI",
                     audience: "JobPortalFrontend",
                     claims: claims,
-                    expires: DateTime.Now.AddHours(24),
+                    expires: DateTime.Now.AddMinutes(accessTokenExpirationMinutes),
                     signingCredentials: creds);
 
                 return new JwtSecurityTokenHandler().WriteToken(token);
@@ -709,6 +626,248 @@ namespace JobPortalAPI.Controllers
                 Console.WriteLine($"JWT Token Generation Error: {ex.Message}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 throw; // Re-throw to be caught by the outer try-catch
+            }
+        }
+
+        private string GenerateRefreshToken(int userId, string ipAddress, string userAgent)
+        {
+            try
+            {
+                var refreshTokenExpirationDays = int.Parse(Environment.GetEnvironmentVariable("JWT_REFRESH_TOKEN_EXPIRATION_DAYS") ?? "7");
+                var token = Guid.NewGuid().ToString() + Guid.NewGuid().ToString(); // Generate a long random string
+
+                var refreshToken = new RefreshToken
+                {
+                    UserId = userId,
+                    Token = BCrypt.Net.BCrypt.HashPassword(token), // Hash the refresh token
+                    ExpiresAt = DateTime.Now.AddDays(refreshTokenExpirationDays),
+                    CreatedAt = DateTime.Now,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    IsRevoked = false
+                };
+
+                _context.RefreshTokens.Add(refreshToken);
+                _context.SaveChanges();
+
+                return token; // Return the plain token to the client
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Refresh Token Generation Error: {ex.Message}");
+                throw;
+            }
+        }
+
+        private async Task LogLoginAttemptAsync(int? userId, string email, bool isSuccessful, string ipAddress, string userAgent)
+        {
+            try
+            {
+                var loginAttempt = new UserLoginAttempt
+                {
+                    UserId = userId ?? 0, // 0 for non-existent users
+                    AttemptTime = DateTime.Now,
+                    IsSuccessful = isSuccessful,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent
+                };
+
+                _context.UserLoginAttempts.Add(loginAttempt);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error logging login attempt: {ex.Message}");
+                // Don't throw here to avoid breaking the login flow
+            }
+        }
+
+        private async Task HandleFailedLoginAttemptAsync(User user, string ipAddress, string userAgent)
+        {
+            try
+            {
+                // Increment failed login attempts
+                user.FailedLoginAttempts++;
+
+                var maxAttempts = int.Parse(Environment.GetEnvironmentVariable("MAX_LOGIN_ATTEMPTS") ?? "5");
+                var lockoutDurationMinutes = int.Parse(Environment.GetEnvironmentVariable("LOCKOUT_DURATION_MINUTES") ?? "30");
+
+                // Check if account should be locked
+                if (user.FailedLoginAttempts >= maxAttempts)
+                {
+                    user.LockoutEnd = DateTime.Now.AddMinutes(lockoutDurationMinutes);
+                    user.FailedLoginAttempts = 0; // Reset counter after lockout
+                    Console.WriteLine($"Account locked for user {user.Email} until {user.LockoutEnd}");
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Log the failed attempt
+                await LogLoginAttemptAsync(user.UserId, user.Email, false, ipAddress, userAgent);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling failed login attempt: {ex.Message}");
+                // Don't throw here to avoid breaking the login flow
+            }
+        }
+
+        private async Task HandleSuccessfulLoginAsync(User user, string ipAddress, string userAgent)
+        {
+            try
+            {
+                // Reset failed login attempts on successful login
+                user.FailedLoginAttempts = 0;
+                user.LockoutEnd = null;
+                user.UpdatedAt = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+
+                // Log the successful attempt
+                await LogLoginAttemptAsync(user.UserId, user.Email, true, ipAddress, userAgent);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling successful login: {ex.Message}");
+                // Don't throw here to avoid breaking the login flow
+            }
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.Email))
+                {
+                    return BadRequest(new { message = "Email is required" });
+                }
+
+                // Validate email format
+                if (!System.Text.RegularExpressions.Regex.IsMatch(request.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                {
+                    return BadRequest(new { message = "Invalid email format" });
+                }
+
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+                if (user == null)
+                {
+                    // Don't reveal if email exists or not for security
+                    return Ok(new { message = "If the email exists, a password reset link has been sent." });
+                }
+
+                // Get client info for logging
+                var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                // Generate secure reset token
+                var resetToken = Guid.NewGuid().ToString() + Guid.NewGuid().ToString();
+                var tokenExpirationHours = int.Parse(Environment.GetEnvironmentVariable("PASSWORD_RESET_TOKEN_EXPIRATION_HOURS") ?? "24");
+
+                var passwordResetToken = new PasswordResetToken
+                {
+                    UserId = user.UserId,
+                    Token = BCrypt.Net.BCrypt.HashPassword(resetToken),
+                    ExpiresAt = DateTime.Now.AddHours(tokenExpirationHours),
+                    CreatedAt = DateTime.Now,
+                    IsUsed = false,
+                    IpAddress = clientIp,
+                    UserAgent = userAgent
+                };
+
+                _context.PasswordResetTokens.Add(passwordResetToken);
+                await _context.SaveChangesAsync();
+
+                // In a real application, send email here
+                // For demo purposes, we'll log the token
+                Console.WriteLine($"Password reset token for {user.Email}: {resetToken}");
+                Console.WriteLine($"Token expires at: {passwordResetToken.ExpiresAt}");
+
+                // TODO: Integrate with email service
+                // await _emailService.SendPasswordResetEmail(user.Email, resetToken);
+
+                return Ok(new
+                {
+                    message = "If the email exists, a password reset link has been sent.",
+                    resetToken = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development" ? resetToken : null // Only expose in development
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Forgot password error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred while processing your request" });
+            }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.NewPassword))
+                {
+                    return BadRequest(new { message = "Token and new password are required" });
+                }
+
+                // Validate password complexity
+                string passwordError;
+                if (!PasswordValidation.IsValidPassword(request.NewPassword, out passwordError))
+                {
+                    return BadRequest(new { message = passwordError });
+                }
+
+                // Find valid reset token
+                var resetTokens = await _context.PasswordResetTokens
+                    .Where(t => !t.IsUsed && t.ExpiresAt > DateTime.Now)
+                    .ToListAsync();
+
+                PasswordResetToken? validToken = null;
+                foreach (var token in resetTokens)
+                {
+                    if (BCrypt.Net.BCrypt.Verify(request.Token, token.Token))
+                    {
+                        validToken = token;
+                        break;
+                    }
+                }
+
+                if (validToken == null)
+                {
+                    return BadRequest(new { message = "Invalid or expired reset token" });
+                }
+
+                // Get user
+                var user = await _context.Users.FindAsync(validToken.UserId);
+                if (user == null)
+                {
+                    return BadRequest(new { message = "User not found" });
+                }
+
+                // Update password
+                user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                user.UpdatedAt = DateTime.Now;
+
+                // Mark token as used
+                validToken.IsUsed = true;
+
+                // Reset account lockout if it was locked
+                user.FailedLoginAttempts = 0;
+                user.LockoutEnd = null;
+
+                await _context.SaveChangesAsync();
+
+                // Get client info for logging
+                var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                Console.WriteLine($"Password reset successful for user: {user.Email} from IP: {clientIp}");
+
+                return Ok(new { message = "Password has been reset successfully" });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Reset password error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred while resetting your password" });
             }
         }
     }

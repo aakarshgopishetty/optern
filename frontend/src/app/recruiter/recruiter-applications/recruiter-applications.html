@@ -1,21 +1,23 @@
 <div class="applications-page">
   <div class="header-row">
     <h1>
-      <span class="main-title">Applications</span> 
+      <span class="main-title">Applications</span>
       <span class="main-highlight">Management</span>
     </h1>
-    <button class="activity-btn" (click)="openAnalyticsModal()"> 
-      <i class="bi bi-bar-chart"></i> Activity Tracker 
-    </button>
+    <!-- <button class="activity-btn" (click)="openAnalyticsModal()">
+      <i class="bi bi-bar-chart"></i> Activity Tracker
+    </button> -->
   </div>
   <div class="subtitle">Review and manage candidate applications for your job postings.</div>
+
   <div class="controls-row">
     <input type="text" class="search-input" placeholder="Search applications..." [(ngModel)]="search" />
     <select [(ngModel)]="filterStatus">
       <option>All Status</option>
       <option>Applied</option>
-      <option>Interview Scheduled</option>
+      <option>Hold</option>
       <option>Shortlisted</option>
+      <option>Interview Scheduled</option>
       <option>Rejected</option>
     </select>
     <div class="view-buttons">
@@ -30,7 +32,7 @@
       <div class="app-details">
         <div class="name-row">
           <span class="applicant-name">{{app.name}}</span>
-          <span class="role">{{app.role}} at {{app.company}}</span>
+          <span class="role">Applied for {{app.role}}</span>
         </div>
         <div class="info-row">
           <span class="email">{{app.email}}</span>
@@ -50,9 +52,16 @@
           <button class="view-details-btn" (click)="openDetailModal(app)">
             <i class="bi bi-eye"></i> View Details
           </button>
-          <button class="shortlist-btn" *ngIf="app.status==='Applied'" (click)="shortlist(app)">Shortlist</button>
+          <button class="shortlist-btn" *ngIf="app.status==='Applied'" (click)="shortlist(app)">
+            <i class="bi bi-check-circle"></i> Shortlist
+          </button>
           <button class="interview-btn" *ngIf="app.status==='Shortlisted'" (click)="scheduleInterview(app)">Schedule Interview</button>
-          <button class="reject-btn" *ngIf="app.status!=='Rejected'" (click)="updateStatus(app, 'Rejected')">Reject</button>
+          <button class="unreject-btn" *ngIf="app.status==='Rejected'" (click)="updateStatus(app, 'Applied')">
+            <i class="bi bi-arrow-counterclockwise"></i> Move to Applied
+          </button>
+          <button class="reject-btn" *ngIf="app.status!=='Rejected'" (click)="updateStatus(app, 'Rejected')">
+            <i class="bi bi-x-circle"></i> Reject
+          </button>
         </div>
     </div>
   </div>
@@ -70,7 +79,7 @@
     
     <div class="card-content">
       <h3 class="name-title">{{ app.name }}</h3>
-      <p class="role">{{ app.role }} at {{ app.company }}</p>
+      <p class="role">Applied for {{ app.role }}</p>
       
       <div class="card-info">
         <span><i class="bi bi-envelope"></i> {{ app.email }}</span>
@@ -108,7 +117,13 @@
           *ngIf="app.status === 'Shortlisted'"
           class="interview-btn"
           (click)="scheduleInterview(app)">
-          Schedule Interview
+          <i class="bi bi-calendar2-plus"></i> Schedule
+        </button>
+        <button
+          *ngIf="app.status === 'Rejected'"
+          class="unreject-btn"
+          (click)="updateStatus(app, 'Applied')">
+          <i class="bi bi-arrow-counterclockwise"></i> Move to Applied
         </button>
         <button
           *ngIf="app.status !== 'Rejected'"
@@ -119,6 +134,8 @@
       </div>
     </div>
   </div>
+
+
 </div>
 
 
@@ -127,49 +144,120 @@
     <div class="modal-container" (click)="$event.stopPropagation()">
       <button class="modal-close" (click)="closeDetailModal()"><i class="bi bi-x"></i></button>
       <div class="modal-header">
-        <div class="avatar-modal" [ngStyle]="{'background': selectedApplication?.color}">{{selectedApplication?.initials}}</div>
-        <h2>{{selectedApplication?.name}}</h2>
-        <div class="role-modal">{{selectedApplication?.role}} at {{selectedApplication?.company}}</div>
-        <div class="status-badge-modal" [ngClass]="selectedApplication?.status?.toLowerCase()">{{selectedApplication?.status}}</div>
-        <div class="rating-modal"><i class="bi bi-star"></i> {{selectedApplication?.rating}}</div>
-      </div>
-      <div class="modal-content">
-        <div class="modal-section">
-          <h4>Contact Information</h4>
-          <div class="contact-info"><i class="bi bi-envelope"></i> {{selectedApplication?.email}}</div>
-          <div class="contact-info"><i class="bi bi-telephone"></i> {{selectedApplication?.phone}}</div>
-          <div class="contact-info"><i class="bi bi-geo-alt"></i> {{selectedApplication?.location}}</div>
+        <div class="modal-header-left">
+          <div class="avatar-modal" [ngStyle]="{'background': selectedApplication?.color}">{{selectedApplication?.initials}}</div>
+          <div class="modal-header-info">
+            <h2>{{selectedApplication?.name}}</h2>
+            <div class="role-modal">Applied for {{selectedApplication?.role}}</div>
+          </div>
         </div>
+        <div class="modal-header-right">
+          <div class="status-badge-modal" [ngClass]="selectedApplication?.status?.toLowerCase()">{{selectedApplication?.status}}</div>
+          <div class="rating-modal">
+            <i class="bi bi-star"></i>
+            {{selectedApplication?.rating}}
+          </div>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Contact Information Section -->
         <div class="modal-section">
-          <h4>Skills</h4>
-          <div>
+          <div class="section-header">
+            <i class="bi bi-person-lines-fill section-icon"></i>
+            <h3 class="section-title">Contact Information</h3>
+          </div>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Email</span>
+              <div class="info-value-with-icon">
+                <i class="bi bi-envelope value-icon"></i>
+                <span class="info-value contact-link" (click)="contactCandidate('email', selectedApplication?.email)">{{selectedApplication?.email}}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Phone</span>
+              <div class="info-value-with-icon">
+                <i class="bi bi-telephone value-icon"></i>
+                <span class="info-value contact-link" (click)="contactCandidate('phone', selectedApplication?.phone)">{{selectedApplication?.phone}}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Location</span>
+              <div class="info-value-with-icon">
+                <i class="bi bi-geo-alt value-icon"></i>
+                <span class="info-value">{{selectedApplication?.location}}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Applied Date</span>
+              <div class="info-value-with-icon">
+                <i class="bi bi-calendar value-icon"></i>
+                <span class="info-value">{{selectedApplication?.applied}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Skills Section -->
+        <div class="modal-section">
+          <div class="section-header">
+            <i class="bi bi-tools section-icon"></i>
+            <h3 class="section-title">Skills & Expertise</h3>
+          </div>
+          <div class="skill-tags">
             <span *ngFor="let skill of selectedApplication?.skills" class="skill-tag-modal">{{skill}}</span>
           </div>
         </div>
+
+        <!-- Professional Information -->
         <div class="modal-section">
-          <h4>Application Details</h4>
-          <div>Applied: {{selectedApplication?.applied}}</div>
-          <div>Position: {{selectedApplication?.role}}</div>
+          <div class="section-header">
+            <i class="bi bi-briefcase section-icon"></i>
+            <h3 class="section-title">Professional Information</h3>
+          </div>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Position Applied</span>
+              <span class="info-value">{{selectedApplication?.role}}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Experience Level</span>
+              <span class="info-value">{{selectedApplication?.experience}}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Education</span>
+              <span class="info-value">{{selectedApplication?.education}}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Rating</span>
+              <div class="info-value-with-icon">
+                <i class="bi bi-star-fill value-icon" style="color: #fbbf24;"></i>
+                <span class="info-value">{{selectedApplication?.rating}}/5</span>
+              </div>
+            </div>
+          </div>
         </div>
+
+
+
+        <!-- Action Buttons -->
         <div class="modal-section">
-          <h4>Education</h4>
-          <div>{{selectedApplication?.education}}</div>
-        </div>
-        <div class="modal-section">
-          <h4>Experience</h4>
-          <div>{{selectedApplication?.experience}}</div>
-        </div>
-        <div class="modal-section">
-          <h4>Cover Letter</h4>
-          <div>{{selectedApplication?.coverLetter}}</div>
-        </div>
-        <div class="modal-actions">
-          <button class="resume-btn" (click)="downloadResume(selectedApplication)"><i class="bi bi-download"></i> Download Resume</button>
-          <button class="interview-btn" (click)="scheduleInterviewFromModal(selectedApplication)"><i class="bi bi-calendar2-plus"></i> Schedule Interview</button>
-        </div>
-        <div class="decision-actions">
-          <button class="shortlist-btn" (click)="shortlist(selectedApplication)">Shortlist Candidate</button>
-          <button class="reject-btn" (click)="updateStatus(selectedApplication, 'Rejected')">Reject Application</button>
+          <div class="modal-actions">
+            <button class="resume-btn" (click)="downloadResume(selectedApplication)">
+              <i class="bi bi-download"></i> Download Resume
+            </button>
+            <button class="interview-btn" (click)="scheduleInterviewFromModal(selectedApplication)">
+              <i class="bi bi-calendar2-plus"></i> Schedule Interview
+            </button>
+          </div>
+          <div class="decision-actions">
+            <button class="shortlist-btn" (click)="shortlist(selectedApplication)">
+              <i class="bi bi-check-circle"></i> Shortlist Candidate
+            </button>
+            <button class="reject-btn" (click)="updateStatus(selectedApplication, 'Rejected')">
+              <i class="bi bi-x-circle"></i> Reject Application
+            </button>
+          </div>
         </div>
       </div>
     </div>

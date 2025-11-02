@@ -40,6 +40,9 @@ export class Profile implements OnInit {
     currentSemester: ''
   };
 
+  // User's registration date (from auth service)
+  userRegistrationDate: Date | null = null;
+
   // Form data for editing
   editProfile: CandidateProfile = { ...this.profile };
 
@@ -79,18 +82,25 @@ export class Profile implements OnInit {
 
   ngOnInit() {
     console.log('Profile component initialized');
+
+    // Get user's registration date from auth service
+    const currentUser = this.authService.getCurrentUser();
+    this.userRegistrationDate = currentUser?.createdAt || null;
+
     this.loadProfile();
     // Listen for auth service changes to refresh profile when user logs in
     this.authService.currentUser$.subscribe(user => {
       console.log('Auth service user changed:', user);
       if (user && user.userId > 0) {
         console.log('Valid user logged in, refreshing profile...');
+        this.userRegistrationDate = user.createdAt || null;
         this.forceReloadProfile();
       } else {
         console.log('User logged out or invalid user, clearing profile...');
         // Clear profile data when user logs out
         this.profile = this.getDefaultProfile();
         this.editProfile = { ...this.profile };
+        this.userRegistrationDate = null;
       }
     });
   }
@@ -459,7 +469,7 @@ export class Profile implements OnInit {
       phoneNumber: '',
       linkedInProfile: '',
       address: '',
-      dateOfBirth: new Date(),
+      dateOfBirth: null, // No default date of birth - user must enter it
       gender: '',
       status: 'Active',
       resumeURL: '',

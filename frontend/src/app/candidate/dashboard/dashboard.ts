@@ -15,7 +15,7 @@ import { CandidateProfile } from '../../models/candidate-profile.model';
 export class Dashboard implements OnInit, OnDestroy {
   stats: DashboardStats = {};
   announcements: AnnouncementItem[] = [];
-  userName: string = 'John Student';
+  userName: string = 'User';
   isLoading: boolean = true;
 
   constructor(
@@ -78,10 +78,21 @@ export class Dashboard implements OnInit, OnDestroy {
       next: (profile) => {
         if (profile && profile.fullName) {
           this.userName = profile.fullName;
+        } else {
+          // Fallback to username from auth service if no fullName in profile
+          const currentUser = this.authService.getCurrentUser();
+          if (currentUser && currentUser.username) {
+            this.userName = currentUser.username;
+          }
         }
       },
       error: (error) => {
         console.error('Error loading user profile:', error);
+        // Fallback to username from auth service on error
+        const currentUser = this.authService.getCurrentUser();
+        if (currentUser && currentUser.username) {
+          this.userName = currentUser.username;
+        }
       }
     });
   }
