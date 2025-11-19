@@ -1,0 +1,86 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: optern
+  API_IMAGE: optern-api
+  FRONTEND_IMAGE: optern-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push API Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./JobPortalAPI
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.API_IMAGE }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push Frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy Azure Resources
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        resourceGroupName: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        template: ./azure-deploy.bicep
+        parameters: >
+          environmentName=optern-prod
+          repositoryUrl=https://github.com/aakarshgopishetty/optern
+          sqlAdministratorLogin=${{ secrets.SQL_ADMIN_LOGIN }}
+          sqlAdministratorLoginPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
+
+    - name: Deploy API to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: optern-prod-api
+        images: 'optern/optern-api:latest'
+
+    - name: Deploy Frontend to Azure Static Web App
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: "upload"
+        app_location: "/frontend"
+        output_location: "/dist"
+        skip_app_build: false

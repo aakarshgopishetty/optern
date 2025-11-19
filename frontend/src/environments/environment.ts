@@ -10,6 +10,7 @@
 // - Production: 'https://api.yourapp.com'
 
 export const environment = {
-  production: false, // Angular automatically sets this to true in production builds
-  apiBaseUrl: 'http://localhost:5001' // ← Change this URL for your environment
+  production: true, // Angular automatically sets this to true in production builds
+  apiBaseUrl: 'https://optern-prod-api.azurewebsites.net'
+  //apiBaseUrl: 'https://localhost:5001' // ← Change this URL for your environment
 };
