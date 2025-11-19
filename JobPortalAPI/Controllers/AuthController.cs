@@ -12,6 +12,9 @@ using System.IO;
 
 namespace JobPortalAPI.Controllers
 {
+    /// <summary>
+    /// Authentication and user management endpoints
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
@@ -29,6 +32,15 @@ namespace JobPortalAPI.Controllers
             public string Password { get; set; } = string.Empty;
         }
 
+        /// <summary>
+        /// Authenticates a user and returns a JWT token
+        /// </summary>
+        /// <param name="req">Login credentials containing email and password</param>
+        /// <returns>JWT token and user information on successful login</returns>
+        /// <response code="200">Login successful with user data and token</response>
+        /// <response code="400">Invalid email or password</response>
+        /// <response code="401">Unauthorized - invalid credentials</response>
+        /// <response code="500">Internal server error</response>
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest req)
         {

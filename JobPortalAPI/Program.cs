@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +43,49 @@ builder.Services.AddControllers()
         // Disable automatic model state validation to handle it manually
         options.SuppressModelStateInvalidFilter = true;
     });
+
+// Add Swagger/OpenAPI services
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Job Portal API",
+        Version = "v1",
+        Description = "A comprehensive API for the Job Portal application",
+        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        {
+            Name = "Job Portal Team",
+            Email = "support@jobportal.com"
+        }
+    });
+
+    // Add JWT Bearer token support in Swagger UI
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter JWT token in the format: Bearer {your-token}"
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 // Log the registered controllers
 var controllers = AppDomain.CurrentDomain.GetAssemblies()
@@ -222,6 +266,15 @@ app.UseCors("AllowAll");
 // Enable static files so backend can optionally serve the frontend build from wwwroot
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Enable Swagger UI in development and production
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Job Portal API v1");
+    options.RoutePrefix = "swagger"; // Access at /swagger
+    options.DocumentTitle = "Job Portal API Documentation";
+});
 
 app.UseRouting();
 
