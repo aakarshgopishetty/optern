@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { ConfigService } from './config.service';
 
 export interface Company {
   companyID: number;
@@ -13,18 +14,20 @@ export interface Company {
 
 @Injectable({ providedIn: 'root' })
 export class CompanyService {
-  private baseUrl = '/api/Companies';
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private configService: ConfigService) {}
 
   getAll(): Observable<Company[]> {
-    return this.http.get<Company[]>(this.baseUrl);
+    const companiesUrl = this.configService.getCompaniesUrl();
+    return this.http.get<Company[]>(companiesUrl);
   }
 
   get(id: number) {
-    return this.http.get<Company>(`${this.baseUrl}/${id}`);
+    const companiesUrl = this.configService.getCompaniesUrl();
+    return this.http.get<Company>(`${companiesUrl}/${id}`);
   }
 
   update(id: number, company: any): Observable<any> {
-    return this.http.put<any>(`${this.baseUrl}/${id}`, company);
+    const companiesUrl = this.configService.getCompaniesUrl();
+    return this.http.put<any>(`${companiesUrl}/${id}`, company);
   }
 }

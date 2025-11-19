@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { ConfigService } from './config.service';
 
 export interface RecruiterProfile {
   recruiterID: number;
@@ -30,15 +31,15 @@ export interface RecruiterProfile {
 
 @Injectable({ providedIn: 'root' })
 export class RecruiterService {
-  private baseUrl = '/api/Recruiters';
-  
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private configService: ConfigService) {}
 
   getProfile(): Observable<RecruiterProfile> {
-    return this.http.get<RecruiterProfile>(`${this.baseUrl}/profile`);
+    const recruitersUrl = this.configService.getRecruitersUrl();
+    return this.http.get<RecruiterProfile>(`${recruitersUrl}/profile`);
   }
 
   updateProfile(profile: Partial<RecruiterProfile>): Observable<RecruiterProfile> {
-    return this.http.put<RecruiterProfile>(`${this.baseUrl}/profile`, profile);
+    const recruitersUrl = this.configService.getRecruitersUrl();
+    return this.http.put<RecruiterProfile>(`${recruitersUrl}/profile`, profile);
   }
 }

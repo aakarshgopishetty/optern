@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+import { ConfigService } from './config.service';
 
 export interface DashboardStats {
   TotalOpportunities?: number;
@@ -55,9 +56,7 @@ export interface ChartData {
   providedIn: 'root'
 })
 export class DashboardService {
-  private baseUrl = '/api/Dashboard';
-
-  constructor(private http: HttpClient, private authService: AuthService) {}
+  constructor(private http: HttpClient, private authService: AuthService, private configService: ConfigService) {}
 
   private getHeaders(): HttpHeaders {
     const currentUser = this.authService.getCurrentUser();
@@ -74,27 +73,33 @@ export class DashboardService {
 
   // Candidate dashboard methods
   getCandidateStats(): Observable<DashboardStats> {
-    return this.http.get<DashboardStats>(`${this.baseUrl}/candidate-stats`, { headers: this.getHeaders() });
+    const dashboardUrl = this.configService.getDashboardUrl();
+    return this.http.get<DashboardStats>(`${dashboardUrl}/candidate-stats`, { headers: this.getHeaders() });
   }
 
   getAnnouncements(): Observable<AnnouncementItem[]> {
-    return this.http.get<AnnouncementItem[]>(`${this.baseUrl}/announcements`, { headers: this.getHeaders() });
+    const dashboardUrl = this.configService.getDashboardUrl();
+    return this.http.get<AnnouncementItem[]>(`${dashboardUrl}/announcements`, { headers: this.getHeaders() });
   }
 
   // Recruiter dashboard methods
   getRecruiterStats(): Observable<DashboardStats> {
-    return this.http.get<DashboardStats>(`${this.baseUrl}/recruiter-stats`, { headers: this.getHeaders() });
+    const dashboardUrl = this.configService.getDashboardUrl();
+    return this.http.get<DashboardStats>(`${dashboardUrl}/recruiter-stats`, { headers: this.getHeaders() });
   }
 
   getTopPerformingJobs(): Observable<JobPerformanceItem[]> {
-    return this.http.get<JobPerformanceItem[]>(`${this.baseUrl}/top-jobs`, { headers: this.getHeaders() });
+    const dashboardUrl = this.configService.getDashboardUrl();
+    return this.http.get<JobPerformanceItem[]>(`${dashboardUrl}/top-jobs`, { headers: this.getHeaders() });
   }
 
   getChartData(): Observable<ChartData> {
-    return this.http.get<ChartData>(`${this.baseUrl}/chart-data`, { headers: this.getHeaders() });
+    const dashboardUrl = this.configService.getDashboardUrl();
+    return this.http.get<ChartData>(`${dashboardUrl}/chart-data`, { headers: this.getHeaders() });
   }
 
   getRecruiterActivities(): Observable<ActivityItem[]> {
-    return this.http.get<ActivityItem[]>(`${this.baseUrl}/recruiter-activities`, { headers: this.getHeaders() });
+    const dashboardUrl = this.configService.getDashboardUrl();
+    return this.http.get<ActivityItem[]>(`${dashboardUrl}/recruiter-activities`, { headers: this.getHeaders() });
   }
 }

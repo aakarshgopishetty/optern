@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
+import { ConfigService } from './config.service';
 
 export interface Grievance {
   greivanceID?: number;
@@ -43,13 +44,12 @@ export interface CreateGrievanceRequest {
   providedIn: 'root'
 })
 export class GrievanceService {
-  private apiUrl = 'http://localhost:5000/api/grievances'; // Direct API URL
-
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient, private configService: ConfigService) { }
 
   // Get all grievances
   getAllGrievances(): Observable<Grievance[]> {
-    return this.http.get<any>(this.apiUrl)
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.get<any>(grievancesUrl)
       .pipe(
         map(response => response.values || response),
         catchError(this.handleError)
@@ -58,7 +58,8 @@ export class GrievanceService {
 
   // Get grievance by ID
   getGrievanceById(id: number): Observable<Grievance> {
-    return this.http.get<Grievance>(`${this.apiUrl}/${id}`)
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.get<Grievance>(`${grievancesUrl}/${id}`)
       .pipe(
         catchError(this.handleError)
       );
@@ -73,7 +74,8 @@ export class GrievanceService {
       createdDate: grievance.createdDate || new Date().toISOString()
     };
 
-    return this.http.post<Grievance>(this.apiUrl, newGrievance, {
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.post<Grievance>(grievancesUrl, newGrievance, {
       timeout: 30000 // 30 second timeout
     })
       .pipe(
@@ -90,7 +92,8 @@ export class GrievanceService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.http.post(`${this.apiUrl}/upload`, formData)
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.post(`${grievancesUrl}/upload`, formData)
       .pipe(
         catchError(this.handleError)
       );
@@ -99,7 +102,8 @@ export class GrievanceService {
   // Create grievance with file attachment
   createGrievanceWithAttachment(formData: FormData): Observable<Grievance> {
     console.log('Creating grievance with attachment...');
-    return this.http.post<Grievance>(`${this.apiUrl}/create-with-attachment`, formData, {
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.post<Grievance>(`${grievancesUrl}/create-with-attachment`, formData, {
       timeout: 60000, // 60 second timeout for file uploads
       reportProgress: true
     })
@@ -114,7 +118,8 @@ export class GrievanceService {
 
   // Update grievance
   updateGrievance(id: number, grievance: Partial<Grievance>): Observable<void> {
-    return this.http.put<void>(`${this.apiUrl}/${id}`, grievance)
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.put<void>(`${grievancesUrl}/${id}`, grievance)
       .pipe(
         catchError(this.handleError)
       );
@@ -122,7 +127,8 @@ export class GrievanceService {
 
   // Delete grievance
   deleteGrievance(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/${id}`)
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.delete<void>(`${grievancesUrl}/${id}`)
       .pipe(
         catchError(this.handleError)
       );
@@ -131,7 +137,8 @@ export class GrievanceService {
   // Get grievances by user ID
   getGrievancesByUser(userId: number): Observable<Grievance[]> {
     console.log('Fetching grievances for user:', userId);
-    return this.http.get<Grievance[]>(this.apiUrl)
+    const grievancesUrl = this.configService.getGrievancesUrl();
+    return this.http.get<Grievance[]>(grievancesUrl)
       .pipe(
         map(grievances => {
           console.log('All grievances:', grievances);

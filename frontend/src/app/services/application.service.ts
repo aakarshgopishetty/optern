@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, tap, map } from 'rxjs';
 import { AuthService } from './auth.service';
+import { ConfigService } from './config.service';
 
 export interface Application {
   ApplicationID: number;
@@ -48,16 +49,17 @@ export interface ApplicationUpdateRequest {
 
 @Injectable({ providedIn: 'root' })
 export class ApplicationService {
-  private baseUrl = '/api/Applications';
-  constructor(private http: HttpClient, private authService: AuthService) {}
+  constructor(private http: HttpClient, private authService: AuthService, private configService: ConfigService) {}
 
   getAll(): Observable<Application[]> {
-    return this.http.get<Application[]>(this.baseUrl);
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.get<Application[]>(applicationsUrl);
   }
 
   getByRecruiter(): Observable<Application[]> {
     const token = this.authService.getToken();
-    return this.http.get<Application[]>(`${this.baseUrl}/by-recruiter`, {
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.get<Application[]>(`${applicationsUrl}/by-recruiter`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : 'Bearer test-token'
@@ -79,7 +81,8 @@ export class ApplicationService {
     console.log('ApplicationService: Fetching applications for candidate');
     const token = this.authService.getToken();
     console.log('Using token for request:', token);
-    return this.http.get<Application[]>(`/api/Applications/by-candidate`, {
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.get<Application[]>(`${applicationsUrl}/by-candidate`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : 'Bearer test-token'
@@ -106,12 +109,14 @@ export class ApplicationService {
   }
 
   get(id: number) {
-    return this.http.get<Application>(`${this.baseUrl}/${id}`);
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.get<Application>(`${applicationsUrl}/${id}`);
   }
 
   create(payload: any) {
     const token = this.authService.getToken();
-    return this.http.post(this.baseUrl, payload, {
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.post(applicationsUrl, payload, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : 'Bearer test-token'
@@ -121,7 +126,8 @@ export class ApplicationService {
 
   update(id: number, payload: any) {
     const token = this.authService.getToken();
-    return this.http.put(`${this.baseUrl}/${id}`, payload, {
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.put(`${applicationsUrl}/${id}`, payload, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : 'Bearer test-token'
@@ -131,7 +137,8 @@ export class ApplicationService {
 
   delete(id: number) {
     const token = this.authService.getToken();
-    return this.http.delete(`${this.baseUrl}/${id}`, {
+    const applicationsUrl = this.configService.getApplicationsUrl();
+    return this.http.delete(`${applicationsUrl}/${id}`, {
       headers: {
         'Authorization': token ? `Bearer ${token}` : 'Bearer test-token'
       }

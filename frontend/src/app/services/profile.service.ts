@@ -4,14 +4,13 @@ import { Observable, throwError, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { CandidateProfile, CandidateProfileDto } from '../models/candidate-profile.model';
 import { AuthService } from './auth.service';
+import { ConfigService } from './config.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ProfileService {
-  private apiUrl = '/api/CandidateProfiles';
-
-  constructor(private http: HttpClient, private authService: AuthService) {}
+  constructor(private http: HttpClient, private authService: AuthService, private configService: ConfigService) {}
 
   // Get current user's profile using their user ID
   getProfile(): Observable<CandidateProfile | null> {
@@ -26,7 +25,8 @@ export class ProfileService {
 
     // Get profile by user ID directly from backend
     console.log('Fetching profile for user ID:', currentUser.userId);
-    return this.http.get<CandidateProfileDto>(`${this.apiUrl}/by-user/${currentUser.userId}`).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.get<CandidateProfileDto>(`${candidateProfilesUrl}/by-user/${currentUser.userId}`).pipe(
       map(dto => {
         console.log('Profile DTO received:', dto);
         if (dto) {
@@ -53,7 +53,8 @@ export class ProfileService {
 
   // Fallback method for getting profile (old way)
   private getProfileFallback(userId: number): Observable<CandidateProfile | null> {
-    return this.http.get<CandidateProfileDto[]>(`${this.apiUrl}`).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.get<CandidateProfileDto[]>(candidateProfilesUrl).pipe(
       map(profiles => {
         if (profiles && profiles.length > 0) {
           // Find profile that matches the current user's ID
@@ -73,7 +74,8 @@ export class ProfileService {
 
   // Get profile by ID
   getProfileById(id: number): Observable<CandidateProfile> {
-    return this.http.get<CandidateProfileDto>(`${this.apiUrl}/${id}`).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.get<CandidateProfileDto>(`${candidateProfilesUrl}/${id}`).pipe(
       map(dto => this.convertDtoToProfile(dto)),
       catchError(this.handleError)
     );
@@ -110,7 +112,8 @@ export class ProfileService {
 
     console.log('Creating profile for user:', currentUser.userId, profileDto);
 
-    return this.http.post<CandidateProfileDto>(`${this.apiUrl}`, profileDto).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.post<CandidateProfileDto>(candidateProfilesUrl, profileDto).pipe(
       map(response => {
         console.log('Profile created successfully:', response);
         return this.convertDtoToProfile(response);
@@ -154,7 +157,8 @@ export class ProfileService {
 
     console.log('Profile DTO before updating backend:', profileDto);
     console.log('Updating existing profile with ID:', profile.candidateID);
-    return this.http.put(`${this.apiUrl}/${profile.candidateID}`, profileDto, { observe: 'response' }).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.put(`${candidateProfilesUrl}/${profile.candidateID}`, profileDto, { observe: 'response' }).pipe(
       map(response => {
         console.log('Profile updated successfully:', response.status);
         // For 204 No Content, return the original profile since no data is returned
@@ -166,14 +170,16 @@ export class ProfileService {
 
   // Delete profile
   deleteProfile(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/${id}`).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.delete<void>(`${candidateProfilesUrl}/${id}`).pipe(
       catchError(this.handleError)
     );
   }
 
   // Get all candidate profiles (for recruiters to browse all candidates)
   getAllCandidates(): Observable<CandidateProfile[]> {
-    return this.http.get<any>(`${this.apiUrl}`).pipe(
+    const candidateProfilesUrl = this.configService.getCandidateProfilesUrl();
+    return this.http.get<any>(candidateProfilesUrl).pipe(
       map(response => {
         // Handle ASP.NET Core serialization format with $values
         const dtos = response.$values || response;

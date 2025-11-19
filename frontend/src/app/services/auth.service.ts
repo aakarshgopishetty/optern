@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap, throwError, map, catchError } from 'rxjs';
+import { ConfigService } from './config.service';
 
 export interface User {
   userId: number;
@@ -18,7 +19,7 @@ export class AuthService {
   currentUser$ = this.currentUserSubject.asObservable();
   private initialized = false;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private configService: ConfigService) {
     // Initialize authentication synchronously first
     this.initializeAuth();
   }
@@ -57,8 +58,8 @@ export class AuthService {
   login(email: string, password: string) {
     // Backend expects PascalCase property names
     const payload = { Email: email, Password: password };
-    // TEMPORARILY BYPASS PROXY - Use direct API URL
-    return this.http.post<any>('http://localhost:5001/api/Auth/login', payload, {
+    const loginUrl = `${this.configService.getAuthUrl()}/login`;
+    return this.http.post<any>(loginUrl, payload, {
       headers: {
         'Content-Type': 'application/json'
       }
@@ -137,8 +138,8 @@ export class AuthService {
   }
 
   register(payload: any) {
-    // POST to /api/Users
-    return this.http.post('/api/Users', payload);
+    const registerUrl = this.configService.getUsersUrl();
+    return this.http.post(registerUrl, payload);
   }
 
   logout() {
@@ -165,7 +166,8 @@ export class AuthService {
       CurrentPassword: currentPassword,
       NewPassword: newPassword
     };
-    return this.http.post('/api/Auth/change-password', payload, {
+    const changePasswordUrl = `${this.configService.getAuthUrl()}/change-password`;
+    return this.http.post(changePasswordUrl, payload, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentUser.token}`
@@ -197,7 +199,8 @@ export class AuthService {
       return throwError(() => new Error('Please log in to view active sessions'));
     }
 
-    return this.http.get('/api/Auth/active-sessions', {
+    const activeSessionsUrl = `${this.configService.getAuthUrl()}/active-sessions`;
+    return this.http.get(activeSessionsUrl, {
       headers: {
         'Authorization': `Bearer ${currentUser.token}`
       }
@@ -210,7 +213,8 @@ export class AuthService {
       return throwError(() => new Error('Please log in to revoke sessions'));
     }
 
-    return this.http.post(`/api/Auth/revoke-session/${sessionId}`, {}, {
+    const revokeSessionUrl = `${this.configService.getAuthUrl()}/revoke-session/${sessionId}`;
+    return this.http.post(revokeSessionUrl, {}, {
       headers: {
         'Authorization': `Bearer ${currentUser.token}`
       }
@@ -223,7 +227,8 @@ export class AuthService {
       return throwError(() => new Error('Please log in to revoke sessions'));
     }
 
-    return this.http.post('/api/Auth/revoke-all-sessions', {}, {
+    const revokeAllSessionsUrl = `${this.configService.getAuthUrl()}/revoke-all-sessions`;
+    return this.http.post(revokeAllSessionsUrl, {}, {
       headers: {
         'Authorization': `Bearer ${currentUser.token}`
       }

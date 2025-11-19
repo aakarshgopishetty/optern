@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, BehaviorSubject } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
+import { ConfigService } from './config.service';
 
 export interface Job {
   jobID: number;
@@ -29,13 +30,10 @@ export interface Job {
 
 @Injectable({ providedIn: 'root' })
 export class JobService {
-  // Use relative path so proxy (or backend hosting) works
-  private baseUrl = '/api/Jobs';
-  
   // BehaviorSubjects to store the latest jobs data
   private jobsSubject = new BehaviorSubject<Job[]>([]);
   private recruiterJobsSubject = new BehaviorSubject<Job[]>([]);
-  
+
   // Observable streams that components can subscribe to
   public jobs$ = this.jobsSubject.asObservable();
   public recruiterJobs$ = this.recruiterJobsSubject.asObservable();
@@ -43,7 +41,7 @@ export class JobService {
   // Refresh interval in milliseconds (e.g., every 30 seconds)
   private readonly refreshInterval = 30000;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private configService: ConfigService) {
     // Start periodic refresh for jobs
     this.startPeriodicRefresh();
   }
@@ -159,7 +157,8 @@ export class JobService {
   // Server fetch methods
   private getAllFromServer(): Observable<Job[]> {
     console.log('Fetching all jobs from server');
-    return this.http.get<any>(this.baseUrl).pipe(
+    const jobsUrl = this.configService.getJobsUrl();
+    return this.http.get<any>(jobsUrl).pipe(
       map(response => {
         console.log('Raw server response (all jobs):', response);
         console.log('Response type:', typeof response, 'isArray:', Array.isArray(response));
@@ -205,7 +204,8 @@ export class JobService {
 
   private getByRecruiterFromServer(): Observable<Job[]> {
     console.log('Fetching recruiter jobs from server');
-    return this.http.get<any>(`${this.baseUrl}/by-recruiter`).pipe(
+    const jobsUrl = this.configService.getJobsUrl();
+    return this.http.get<any>(`${jobsUrl}/by-recruiter`).pipe(
       map(response => {
         console.log('Raw server response (recruiter jobs):', response);
         console.log('Response type:', typeof response, 'isArray:', Array.isArray(response));
@@ -265,11 +265,13 @@ export class JobService {
   }
 
   get(id: number) {
-    return this.http.get<any>(`${this.baseUrl}/${id}`).pipe(map(item => this.mapServerToUi(item)));
+    const jobsUrl = this.configService.getJobsUrl();
+    return this.http.get<any>(`${jobsUrl}/${id}`).pipe(map(item => this.mapServerToUi(item)));
   }
 
   create(payload: any) {
-    return this.http.post<any>(this.baseUrl, payload).pipe(
+    const jobsUrl = this.configService.getJobsUrl();
+    return this.http.post<any>(jobsUrl, payload).pipe(
       map(response => {
         // Handle the backend response structure: { success: true, message: "...", job: jobDto, jobId: number }
         const jobData = response.job || response;
@@ -287,7 +289,8 @@ export class JobService {
   }
 
   update(id: number, payload: any) {
-    return this.http.put(`${this.baseUrl}/${id}`, payload).pipe(
+    const jobsUrl = this.configService.getJobsUrl();
+    return this.http.put(`${jobsUrl}/${id}`, payload).pipe(
       tap(() => {
         // Refresh all jobs
         this.refreshAllJobs();
@@ -318,7 +321,8 @@ export class JobService {
   }
 
   delete(id: number) {
-    return this.http.delete(`${this.baseUrl}/${id}`).pipe(
+    const jobsUrl = this.configService.getJobsUrl();
+    return this.http.delete(`${jobsUrl}/${id}`).pipe(
       tap(() => {
         // Refresh all jobs
         this.refreshAllJobs();
